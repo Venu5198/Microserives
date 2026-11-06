@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ecommerce
+
+resources:
+  - 00-namespace.yaml
+  - 01-secrets.yaml
+  - 02-configmaps.yaml
+  - 03-storage.yaml
+  - 04-infrastructure/mongodb.yaml
+  - 04-infrastructure/rabbitmq.yaml
+  - 04-infrastructure/redis.yaml
+  - 04-infrastructure/prometheus.yaml
+  - 04-infrastructure/grafana.yaml
+  - 05-services/user-service.yaml
+  - 05-services/product-service.yaml
+  - 05-services/inventory-service.yaml
+  - 05-services/cart-service.yaml
+  - 05-services/order-service.yaml
+  - 05-services/payment-service.yaml
+  - 05-services/shipping-service.yaml
+  - 05-services/notification-service.yaml
+  - 06-gateway/api-gateway.yaml
+  - 07-frontend/frontend.yaml

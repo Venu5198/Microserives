@@ -42,3 +42,4 @@
 - **Root Cause**: `db.idempotency_keys.create_index("_id", unique=True)` threw `InvalidIndexSpecificationOption` because MongoDB automatically creates a unique index on `_id`.
 - **Fix**: Removed redundant index command on `_id`.
 - **Status**: FIXED & VERIFIED.
+

@@ -22,3 +22,4 @@
 | **Admin Courier Simulator** | Admin / Operations | Real-time courier milestone check-ins (`PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`) | **VERIFIED** |
 | **Admin Health Monitor** | Admin / Operations | Live 5s auto-polling dashboard querying Gateway `/health/services` for all 8 microservices | **VERIFIED** |
 | **TypeScript & Build** | Engineering | `tsc && vite build` generates clean production distribution (`dist/`) without type errors | **VERIFIED** (0 errors) |
+

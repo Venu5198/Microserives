@@ -25,3 +25,4 @@
 - **Component**: `packages/common`
 - **Observation**: Shared library provides foundational technical utilities (`security.py`, `database.py`, `rabbitmq.py`, `logging.py`, `middleware.py`, `outbox_worker.py`).
 - **Audit Verification**: No domain business entities or service-specific business rules were leaked into `packages/common`. Separation of concerns is preserved.
+

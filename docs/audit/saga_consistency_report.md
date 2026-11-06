@@ -54,3 +54,4 @@ stateDiagram-v2
 - **Inputs**: Two simultaneous `POST /api/v1/payments` with the identical idempotency key `audit-key-...`.
 - **Result**: The second invocation returned the original transaction document without double-charging the card.
 - **Verdict**: **PASSED**
+

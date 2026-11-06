@@ -16,3 +16,4 @@
 | **Injection Protection** | Motor asynchronous BSON drivers with parameterized query dicts; zero raw eval | **PASSED** |
 | **API Rate Limiting** | Gateway sliding-window limiter (200 req/min per client IP) | **ACTIVE** |
 | **Static Security Scan** | Bandit AST analysis on Python backend (`bandit -r services/ packages/ -ll -ii`) | **CLEAN** — 0 High, 0 Medium severity issues across 3,137 LOC |
+

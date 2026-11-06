@@ -34,3 +34,4 @@
 - **Test**: Customer B attempts to retrieve Order owned by Customer A via `GET /api/v1/orders/{order_id_of_A}`.
 - **Evidence**: `order-service` applies query filter `{"_id": order_id, "customer_id": user.user_id}`.
 - **Result**: Request returned `404 Not Found`. Customer data ownership is rigorously enforced.
+

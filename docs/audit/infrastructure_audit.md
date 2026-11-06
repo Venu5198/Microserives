@@ -33,3 +33,4 @@ All 15 containers reside in the isolated bridge network `microservices_ecommerce
 - `infrastructure/kubernetes/`: Clean production manifests defining Namespace (`ecommerce-prod`), ConfigMaps, Secrets, Deployments with non-root security contexts, resource requests/limits, readiness/liveness probes, Ingress, and HorizontalPodAutoscalers (HPA).
 - `infrastructure/helm/ecommerce-platform/`: Helm chart with configurable values (`values.yaml`), parameterized replica counts, image registries, and resource constraints for automated GKE rollouts.
 - `.github/workflows/`: CI (`ci.yml`) and GKE deployment (`deploy.yml`) pipelines configured with Google Workload Identity Federation and Trivy vulnerability scanning.
+

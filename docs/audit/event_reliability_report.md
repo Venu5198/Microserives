@@ -40,3 +40,4 @@
 | **Transactional Outbox** | Two-phase dispatch: database aggregate write + `db.outbox` insert in same MongoDB database, published via background OutboxWorker | **VERIFIED** in all event producers |
 | **Correlation ID Tracking** | `X-Correlation-ID` injected into message properties and headers | **VERIFIED** across event logs |
 | **Dead-Letter Queues (DLQ)** | Each queue has a corresponding `.dlq` configured via `x-dead-letter-exchange` | **VERIFIED** in topology |
+
