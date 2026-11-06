@@ -91,3 +91,4 @@ Data survives pod eviction, rolling restarts, or manual pod recreation.
 - **Liveness Probes**:
   - Python microservices: HTTP GET `/health`.
   - Probes automatically restart degraded or deadlocked containers.
+

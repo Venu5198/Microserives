@@ -108,3 +108,4 @@ spec:
       name: prometheus
   selector:
     app: prometheus
+

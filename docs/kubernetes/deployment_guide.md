@@ -113,3 +113,4 @@ Or:
 ```powershell
 kubectl delete namespace ecommerce
 ```
+

@@ -68,3 +68,4 @@ kubectl describe pod <pod-name> -n ecommerce
   kubectl get storageclass
   ```
   Check that `hostpath (default)` is listed. Restart Docker Desktop if storage provisioner pod is crashed.
+
