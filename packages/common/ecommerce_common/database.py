@@ -1,11 +1,12 @@
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from datetime import UTC, datetime
+from typing import Any
+
 from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 
-def serialize_doc(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def serialize_doc(doc: dict[str, Any] | None) -> dict[str, Any] | None:
     if not doc:
         return None
     res = {}
@@ -15,7 +16,12 @@ def serialize_doc(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         elif isinstance(v, datetime):
             res[k] = v.isoformat()
         elif isinstance(v, list):
-            res[k] = [serialize_doc(item) if isinstance(item, dict) else (str(item) if isinstance(item, ObjectId) else item) for item in v]
+            res[k] = [
+                serialize_doc(item)
+                if isinstance(item, dict)
+                else (str(item) if isinstance(item, ObjectId) else item)
+                for item in v
+            ]
         elif isinstance(v, dict):
             res[k] = serialize_doc(v)
         else:
@@ -29,8 +35,8 @@ class DatabaseManager:
     def __init__(self, mongo_uri: str, db_name: str):
         self.mongo_uri = mongo_uri
         self.db_name = db_name
-        self.client: Optional[AsyncIOMotorClient] = None
-        self.db: Optional[AsyncIOMotorDatabase] = None
+        self.client: AsyncIOMotorClient | None = None
+        self.db: AsyncIOMotorDatabase | None = None
 
     async def connect(self):
         self.client = AsyncIOMotorClient(self.mongo_uri)
@@ -47,14 +53,14 @@ class DatabaseManager:
         aggregate_id: str,
         correlation_id: str,
         producer: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         session=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Inserts an event into the outbox collection for guaranteed delivery.
         Can run inside an existing MongoDB transaction session if replica set is active.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message = {
             "outbox_id": str(uuid.uuid4()),
             "event_type": event_type,
@@ -69,4 +75,3 @@ class DatabaseManager:
         }
         await self.db.outbox.insert_one(message, session=session)
         return message
-

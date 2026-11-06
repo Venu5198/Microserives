@@ -1,11 +1,12 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class ShipmentStatus(str, Enum):
@@ -27,7 +28,7 @@ class TrackingEventResponse(BaseModel):
 class ShipmentStatusUpdateRequest(BaseModel):
     status: ShipmentStatus
     location: str = "Regional Sorting Facility"
-    notes: Optional[str] = "Package in transit"
+    notes: str | None = "Package in transit"
 
 
 class ShipmentResponse(BaseModel):
@@ -37,8 +38,7 @@ class ShipmentResponse(BaseModel):
     carrier: str
     status: ShipmentStatus
     estimated_delivery: datetime
-    shipping_address: Dict[str, Any]
-    events: List[TrackingEventResponse] = []
+    shipping_address: dict[str, Any]
+    events: list[TrackingEventResponse] = []
     created_at: datetime
     updated_at: datetime
-

@@ -2,32 +2,30 @@ import os
 import random
 import uuid
 from contextlib import asynccontextmanager
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, status
-from motor.motor_asyncio import AsyncIOMotorClient
-from prometheus_client import Counter, Histogram, make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
-from ecommerce_common.logging import setup_logger, correlation_id_ctx
+from ecommerce_common.database import DatabaseManager, serialize_doc
+from ecommerce_common.logging import correlation_id_ctx, setup_logger
 from ecommerce_common.middleware import register_base_middlewares
-from ecommerce_common.security import (
-    get_current_user_dependency,
-    TokenUser,
-    require_roles,
-)
-from ecommerce_common.database import serialize_doc, DatabaseManager
-from ecommerce_common.rabbitmq import RabbitMQClient
 from ecommerce_common.outbox_worker import OutboxWorker
-from contracts.events.types import EventType
+from ecommerce_common.rabbitmq import RabbitMQClient
+from ecommerce_common.security import (
+    TokenUser,
+    get_current_user_dependency,
+)
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from models import (
-    OrderCreateRequest,
     CancelOrderRequest,
-    OrderResponse,
+    OrderCreateRequest,
     OrderItemResponse,
+    OrderResponse,
     OrderStatus,
     SagaState,
     utc_now,
 )
+from prometheus_client import make_asgi_app
+
+from contracts.events.types import EventType
 
 logger = setup_logger("order-service")
 
@@ -40,8 +38,10 @@ class Settings(BaseServiceSettings):
 
 settings = Settings()
 db_manager = DatabaseManager(settings.MONGO_URI, settings.DATABASE_NAME)
-rabbitmq_client = RabbitMQClient(settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME)
-outbox_worker: Optional[OutboxWorker] = None
+rabbitmq_client = RabbitMQClient(
+    settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME
+)
+outbox_worker: OutboxWorker | None = None
 
 
 async def advance_saga(
@@ -88,8 +88,12 @@ async def handle_saga_events(event_data: dict):
     now = utc_now()
 
     if event_type == EventType.INVENTORY_RESERVED.value:
-        logger.info(f"Saga: Inventory reserved for order {order_id}. Initiating payment.")
-        await advance_saga(order_id, SagaState.INVENTORY_RESERVED.value, payload, correlation_id)
+        logger.info(
+            f"Saga: Inventory reserved for order {order_id}. Initiating payment."
+        )
+        await advance_saga(
+            order_id, SagaState.INVENTORY_RESERVED.value, payload, correlation_id
+        )
         await db_manager.db.orders.update_one(
             {"_id": order_id},
             {"$set": {"status": OrderStatus.AWAITING_PAYMENT.value, "updated_at": now}},
@@ -114,7 +118,9 @@ async def handle_saga_events(event_data: dict):
         )
 
     elif event_type == EventType.INVENTORY_RESERVATION_FAILED.value:
-        logger.warning(f"Saga: Inventory reservation failed for order {order_id}. Cancelling order.")
+        logger.warning(
+            f"Saga: Inventory reservation failed for order {order_id}. Cancelling order."
+        )
         await advance_saga(order_id, SagaState.FAILED.value, payload, correlation_id)
         await db_manager.db.orders.update_one(
             {"_id": order_id},
@@ -174,8 +180,12 @@ async def handle_saga_events(event_data: dict):
         )
 
     elif event_type == EventType.PAYMENT_FAILED.value:
-        logger.warning(f"Saga: Payment failed for order {order_id}. Executing compensation.")
-        await advance_saga(order_id, SagaState.COMPENSATING.value, payload, correlation_id)
+        logger.warning(
+            f"Saga: Payment failed for order {order_id}. Executing compensation."
+        )
+        await advance_saga(
+            order_id, SagaState.COMPENSATING.value, payload, correlation_id
+        )
         await db_manager.db.orders.update_one(
             {"_id": order_id},
             {
@@ -205,7 +215,9 @@ async def handle_saga_events(event_data: dict):
 
     elif event_type == EventType.SHIPMENT_CREATED.value:
         tracking_num = payload.get("tracking_number")
-        logger.info(f"Saga: Shipment created for order {order_id} (Tracking: {tracking_num})")
+        logger.info(
+            f"Saga: Shipment created for order {order_id} (Tracking: {tracking_num})"
+        )
         await db_manager.db.orders.update_one(
             {"_id": order_id},
             {
@@ -319,7 +331,9 @@ def serialize_order(doc: dict) -> OrderResponse:
     )
 
 
-@app.post("/api/v1/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/api/v1/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_order(
     request: OrderCreateRequest,
     user: TokenUser = Depends(get_current_user),
@@ -355,7 +369,9 @@ async def create_order(
         "history": [
             {
                 "state": SagaState.STARTED.value,
-                "details": {"message": "Order created, beginning inventory reservation"},
+                "details": {
+                    "message": "Order created, beginning inventory reservation"
+                },
                 "timestamp": now,
             }
         ],
@@ -388,7 +404,7 @@ async def create_order(
     return serialize_order(order_doc)
 
 
-@app.get("/api/v1/orders", response_model=List[OrderResponse])
+@app.get("/api/v1/orders", response_model=list[OrderResponse])
 async def list_orders(
     user: TokenUser = Depends(get_current_user),
     skip: int = Query(0, ge=0),
@@ -398,7 +414,9 @@ async def list_orders(
     if user.role not in ["ADMIN", "OPERATIONS"]:
         query["customer_id"] = user.user_id
 
-    cursor = db_manager.db.orders.find(query).sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        db_manager.db.orders.find(query).sort("created_at", -1).skip(skip).limit(limit)
+    )
     orders = await cursor.to_list(length=limit)
     return [serialize_order(o) for o in orders]
 
@@ -462,7 +480,10 @@ async def cancel_order(
     now = utc_now()
     corr_id = correlation_id_ctx.get()
 
-    needs_refund = order["status"] in [OrderStatus.CONFIRMED.value, OrderStatus.SHIPPED.value]
+    needs_refund = order["status"] in [
+        OrderStatus.CONFIRMED.value,
+        OrderStatus.SHIPPED.value,
+    ]
     release_inventory = True
 
     await db_manager.db.orders.update_one(
@@ -513,4 +534,3 @@ async def cancel_order(
     logger.info(f"Order {order_id} cancelled by user {user.user_id}")
     updated_order = await db_manager.db.orders.find_one({"_id": order_id})
     return serialize_order(updated_order)
-

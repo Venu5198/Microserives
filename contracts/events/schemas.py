@@ -1,13 +1,14 @@
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
 import uuid
+from datetime import UTC, datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from contracts.events.types import EventType
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class EventEnvelope(BaseModel):
@@ -18,7 +19,7 @@ class EventEnvelope(BaseModel):
     correlation_id: str
     occurred_at: str = Field(default_factory=utc_now)
     producer: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class OrderItemPayload(BaseModel):
@@ -33,22 +34,22 @@ class OrderCreatedPayload(BaseModel):
     order_number: str
     customer_id: str
     customer_email: str
-    items: List[OrderItemPayload]
+    items: list[OrderItemPayload]
     total_amount: int
     currency: str = "USD"
-    shipping_address: Dict[str, Any]
+    shipping_address: dict[str, Any]
 
 
 class InventoryReservedPayload(BaseModel):
     order_id: str
     reservation_id: str
-    reserved_items: List[OrderItemPayload]
+    reserved_items: list[OrderItemPayload]
 
 
 class InventoryReservationFailedPayload(BaseModel):
     order_id: str
     reason: str
-    failed_items: List[OrderItemPayload]
+    failed_items: list[OrderItemPayload]
 
 
 class PaymentInitiatedPayload(BaseModel):
@@ -81,8 +82,8 @@ class OrderConfirmedPayload(BaseModel):
     customer_id: str
     customer_email: str
     total_amount: int
-    shipping_address: Dict[str, Any]
-    items: List[OrderItemPayload]
+    shipping_address: dict[str, Any]
+    items: list[OrderItemPayload]
 
 
 class ShipmentCreatedPayload(BaseModel):
@@ -93,7 +94,7 @@ class ShipmentCreatedPayload(BaseModel):
     estimated_delivery: str
     recipient_email: str
     recipient_name: str
-    shipping_address: Dict[str, Any]
+    shipping_address: dict[str, Any]
 
 
 class ShipmentStatusUpdatedPayload(BaseModel):
@@ -102,8 +103,8 @@ class ShipmentStatusUpdatedPayload(BaseModel):
     tracking_number: str
     old_status: str
     new_status: str
-    location: Optional[str] = None
-    notes: Optional[str] = None
+    location: str | None = None
+    notes: str | None = None
     updated_at: str = Field(default_factory=utc_now)
 
 
@@ -114,7 +115,7 @@ class OrderCancelledPayload(BaseModel):
     reason: str
     refund_required: bool
     inventory_release_required: bool
-    items: List[OrderItemPayload]
+    items: list[OrderItemPayload]
 
 
 class RefundInitiatedPayload(BaseModel):
@@ -143,8 +144,7 @@ class RefundFailedPayload(BaseModel):
 class NotificationRequestedPayload(BaseModel):
     notification_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     recipient_email: str
-    recipient_name: Optional[str] = None
+    recipient_name: str | None = None
     subject: str
     template_name: str
-    template_data: Dict[str, Any]
-
+    template_data: dict[str, Any]

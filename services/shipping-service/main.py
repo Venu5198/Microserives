@@ -3,29 +3,29 @@ import random
 import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, status
-from prometheus_client import make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
-from ecommerce_common.logging import setup_logger, correlation_id_ctx
+from ecommerce_common.database import DatabaseManager
+from ecommerce_common.logging import correlation_id_ctx, setup_logger
 from ecommerce_common.middleware import register_base_middlewares
+from ecommerce_common.outbox_worker import OutboxWorker
+from ecommerce_common.rabbitmq import RabbitMQClient
 from ecommerce_common.security import (
-    get_current_user_dependency,
     TokenUser,
+    get_current_user_dependency,
     require_roles,
 )
-from ecommerce_common.database import serialize_doc, DatabaseManager
-from ecommerce_common.rabbitmq import RabbitMQClient
-from ecommerce_common.outbox_worker import OutboxWorker
-from contracts.events.types import EventType
+from fastapi import Depends, FastAPI, HTTPException, Query
 from models import (
-    ShipmentStatusUpdateRequest,
     ShipmentResponse,
-    TrackingEventResponse,
     ShipmentStatus,
+    ShipmentStatusUpdateRequest,
+    TrackingEventResponse,
     utc_now,
 )
+from prometheus_client import make_asgi_app
+
+from contracts.events.types import EventType
 
 logger = setup_logger("shipping-service")
 
@@ -38,8 +38,10 @@ class Settings(BaseServiceSettings):
 
 settings = Settings()
 db_manager = DatabaseManager(settings.MONGO_URI, settings.DATABASE_NAME)
-rabbitmq_client = RabbitMQClient(settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME)
-outbox_worker: Optional[OutboxWorker] = None
+rabbitmq_client = RabbitMQClient(
+    settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME
+)
+outbox_worker: OutboxWorker | None = None
 
 
 async def create_shipment_for_order(payload: dict, correlation_id: str):
@@ -96,7 +98,9 @@ async def create_shipment_for_order(payload: dict, correlation_id: str):
             "shipping_address": shipping_address,
         },
     )
-    logger.info(f"Shipment {shipment_id} created for order {order_id} (Tracking: {tracking_number})")
+    logger.info(
+        f"Shipment {shipment_id} created for order {order_id} (Tracking: {tracking_number})"
+    )
 
 
 async def handle_shipping_events(event_data: dict):
@@ -105,7 +109,9 @@ async def handle_shipping_events(event_data: dict):
     correlation_id = event_data.get("correlation_id", "")
 
     if event_type == EventType.ORDER_CONFIRMED.value:
-        logger.info(f"Handling OrderConfirmed in shipping-service for order {payload.get('order_id')}")
+        logger.info(
+            f"Handling OrderConfirmed in shipping-service for order {payload.get('order_id')}"
+        )
         await create_shipment_for_order(payload, correlation_id)
 
 
@@ -200,16 +206,24 @@ async def get_shipment(shipment_id: str):
 async def get_order_tracking(order_id: str):
     doc = await db_manager.db.shipments.find_one({"order_id": order_id})
     if not doc:
-        raise HTTPException(status_code=404, detail="Shipment tracking not found for this order")
+        raise HTTPException(
+            status_code=404, detail="Shipment tracking not found for this order"
+        )
     return serialize_shipment(doc)
 
 
-@app.get("/api/v1/shipments", response_model=List[ShipmentResponse], dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))])
+@app.get(
+    "/api/v1/shipments",
+    response_model=list[ShipmentResponse],
+    dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))],
+)
 async def list_shipments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    cursor = db_manager.db.shipments.find().sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        db_manager.db.shipments.find().sort("created_at", -1).skip(skip).limit(limit)
+    )
     items = await cursor.to_list(length=limit)
     return [serialize_shipment(doc) for doc in items]
 
@@ -235,7 +249,8 @@ async def update_shipment_status(
     new_event = {
         "status": update_in.status.value,
         "location": update_in.location,
-        "description": update_in.notes or f"Package status updated to {update_in.status.value}",
+        "description": update_in.notes
+        or f"Package status updated to {update_in.status.value}",
         "timestamp": now,
     }
 
@@ -269,4 +284,3 @@ async def update_shipment_status(
 
     updated_doc = await db_manager.db.shipments.find_one({"_id": shipment_id})
     return serialize_shipment(updated_doc)
-

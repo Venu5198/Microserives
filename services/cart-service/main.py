@@ -1,16 +1,15 @@
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends, status
-import httpx
-from motor.motor_asyncio import AsyncIOMotorClient
-from prometheus_client import make_asgi_app
 
+import httpx
 from ecommerce_common.config import BaseServiceSettings
 from ecommerce_common.logging import setup_logger
 from ecommerce_common.middleware import register_base_middlewares
-from ecommerce_common.security import get_current_user_dependency, TokenUser
-from models import CartItemAdd, CartItemUpdate, CartResponse, CartItemResponse, utc_now
+from ecommerce_common.security import TokenUser, get_current_user_dependency
+from fastapi import Depends, FastAPI, HTTPException, status
+from models import CartItemAdd, CartItemResponse, CartItemUpdate, CartResponse, utc_now
+from motor.motor_asyncio import AsyncIOMotorClient
+from prometheus_client import make_asgi_app
 
 logger = setup_logger("cart-service")
 
@@ -23,9 +22,9 @@ class Settings(BaseServiceSettings):
 
 
 settings = Settings()
-client: Optional[AsyncIOMotorClient] = None
+client: AsyncIOMotorClient | None = None
 db = None
-http_client: Optional[httpx.AsyncClient] = None
+http_client: httpx.AsyncClient | None = None
 
 
 @asynccontextmanager
@@ -59,7 +58,10 @@ async def fetch_product_details(product_id: str) -> dict:
         if resp.status_code == 404:
             raise HTTPException(status_code=404, detail="Product not found")
         if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Unable to validate product with Product Service")
+            raise HTTPException(
+                status_code=502,
+                detail="Unable to validate product with Product Service",
+            )
         return resp.json()
     except httpx.RequestError as e:
         logger.error(f"Error calling Product Service: {e}")
@@ -120,7 +122,9 @@ async def get_cart(user: TokenUser = Depends(get_current_user)):
             total_items=0,
             updated_at=utc_now(),
         )
-    return calculate_cart_response(user.user_id, cart.get("items", []), cart.get("updated_at", utc_now()))
+    return calculate_cart_response(
+        user.user_id, cart.get("items", []), cart.get("updated_at", utc_now())
+    )
 
 
 @app.post("/api/v1/cart/items", response_model=CartResponse)
@@ -144,13 +148,15 @@ async def add_item_to_cart(
             break
 
     if not found:
-        items.append({
-            "product_id": product["id"],
-            "product_name": product["name"],
-            "unit_price": product["price"],
-            "quantity": item_in.quantity,
-            "image_url": product.get("image_url"),
-        })
+        items.append(
+            {
+                "product_id": product["id"],
+                "product_name": product["name"],
+                "unit_price": product["price"],
+                "quantity": item_in.quantity,
+                "image_url": product.get("image_url"),
+            }
+        )
 
     await db.carts.update_one(
         {"user_id": user.user_id},
@@ -212,4 +218,3 @@ async def remove_cart_item(
 @app.delete("/api/v1/cart", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_cart(user: TokenUser = Depends(get_current_user)):
     await db.carts.delete_one({"user_id": user.user_id})
-

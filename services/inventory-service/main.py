@@ -1,31 +1,29 @@
 import os
 import uuid
-import asyncio
 from contextlib import asynccontextmanager
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, status
-from motor.motor_asyncio import AsyncIOMotorClient
-from prometheus_client import Counter, Histogram, make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
+from ecommerce_common.database import DatabaseManager
 from ecommerce_common.logging import setup_logger
 from ecommerce_common.middleware import register_base_middlewares
+from ecommerce_common.outbox_worker import OutboxWorker
+from ecommerce_common.rabbitmq import RabbitMQClient
 from ecommerce_common.security import (
-    get_current_user_dependency,
     TokenUser,
+    get_current_user_dependency,
     require_roles,
 )
-from ecommerce_common.database import serialize_doc, DatabaseManager
-from ecommerce_common.rabbitmq import RabbitMQClient
-from ecommerce_common.outbox_worker import OutboxWorker
-from contracts.events.types import EventType
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from models import (
     InventoryItemCreate,
-    InventoryStockAdjust,
     InventoryItemResponse,
+    InventoryStockAdjust,
     ReserveStockRequest,
     utc_now,
 )
+from prometheus_client import make_asgi_app
+
+from contracts.events.types import EventType
 
 logger = setup_logger("inventory-service")
 
@@ -38,8 +36,10 @@ class Settings(BaseServiceSettings):
 
 settings = Settings()
 db_manager = DatabaseManager(settings.MONGO_URI, settings.DATABASE_NAME)
-rabbitmq_client = RabbitMQClient(settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME)
-outbox_worker: Optional[OutboxWorker] = None
+rabbitmq_client = RabbitMQClient(
+    settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME
+)
+outbox_worker: OutboxWorker | None = None
 
 
 async def reserve_stock_atomic(order_id: str, items: list, correlation_id: str) -> bool:
@@ -66,33 +66,42 @@ async def reserve_stock_atomic(order_id: str, items: list, correlation_id: str) 
         if result.modified_count > 0:
             reserved_so_far.append((p_id, qty))
             # Log transaction
-            await db_manager.db.inventory_txs.insert_one({
-                "tx_id": str(uuid.uuid4()),
-                "order_id": order_id,
-                "product_id": p_id,
-                "type": "RESERVE",
-                "quantity": qty,
-                "created_at": now,
-            })
+            await db_manager.db.inventory_txs.insert_one(
+                {
+                    "tx_id": str(uuid.uuid4()),
+                    "order_id": order_id,
+                    "product_id": p_id,
+                    "type": "RESERVE",
+                    "quantity": qty,
+                    "created_at": now,
+                }
+            )
         else:
             # Insufficient stock - rollback previous items
-            logger.warning(f"Insufficient stock for product {p_id} (needed {qty}). Rolling back.")
+            logger.warning(
+                f"Insufficient stock for product {p_id} (needed {qty}). Rolling back."
+            )
             for rb_pid, rb_qty in reserved_so_far:
                 await db_manager.db.inventory.update_one(
                     {"product_id": rb_pid},
                     {
-                        "$inc": {"available_quantity": rb_qty, "reserved_quantity": -rb_qty},
+                        "$inc": {
+                            "available_quantity": rb_qty,
+                            "reserved_quantity": -rb_qty,
+                        },
                         "$set": {"updated_at": now},
                     },
                 )
-                await db_manager.db.inventory_txs.insert_one({
-                    "tx_id": str(uuid.uuid4()),
-                    "order_id": order_id,
-                    "product_id": rb_pid,
-                    "type": "ROLLBACK_RESERVE",
-                    "quantity": rb_qty,
-                    "created_at": now,
-                })
+                await db_manager.db.inventory_txs.insert_one(
+                    {
+                        "tx_id": str(uuid.uuid4()),
+                        "order_id": order_id,
+                        "product_id": rb_pid,
+                        "type": "ROLLBACK_RESERVE",
+                        "quantity": rb_qty,
+                        "created_at": now,
+                    }
+                )
 
             # Emit InventoryReservationFailed event to outbox
             await db_manager.create_outbox_message(
@@ -110,13 +119,15 @@ async def reserve_stock_atomic(order_id: str, items: list, correlation_id: str) 
 
     # Success: Save reservation document
     res_id = str(uuid.uuid4())
-    await db_manager.db.inventory_reservations.insert_one({
-        "_id": res_id,
-        "order_id": order_id,
-        "items": items,
-        "status": "RESERVED",
-        "created_at": now,
-    })
+    await db_manager.db.inventory_reservations.insert_one(
+        {
+            "_id": res_id,
+            "order_id": order_id,
+            "items": items,
+            "status": "RESERVED",
+            "created_at": now,
+        }
+    )
 
     # Emit InventoryReserved event to outbox
     await db_manager.create_outbox_message(
@@ -153,15 +164,17 @@ async def release_reservation(order_id: str, reason: str = "PaymentFailed"):
                 "$set": {"updated_at": now},
             },
         )
-        await db_manager.db.inventory_txs.insert_one({
-            "tx_id": str(uuid.uuid4()),
-            "order_id": order_id,
-            "product_id": p_id,
-            "type": "RELEASE",
-            "quantity": qty,
-            "reason": reason,
-            "created_at": now,
-        })
+        await db_manager.db.inventory_txs.insert_one(
+            {
+                "tx_id": str(uuid.uuid4()),
+                "order_id": order_id,
+                "product_id": p_id,
+                "type": "RELEASE",
+                "quantity": qty,
+                "reason": reason,
+                "created_at": now,
+            }
+        )
 
     await db_manager.db.inventory_reservations.update_one(
         {"_id": reservation["_id"]},
@@ -189,14 +202,16 @@ async def confirm_reservation(order_id: str):
                 "$set": {"updated_at": now},
             },
         )
-        await db_manager.db.inventory_txs.insert_one({
-            "tx_id": str(uuid.uuid4()),
-            "order_id": order_id,
-            "product_id": p_id,
-            "type": "SOLD",
-            "quantity": qty,
-            "created_at": now,
-        })
+        await db_manager.db.inventory_txs.insert_one(
+            {
+                "tx_id": str(uuid.uuid4()),
+                "order_id": order_id,
+                "product_id": p_id,
+                "type": "SOLD",
+                "quantity": qty,
+                "created_at": now,
+            }
+        )
 
     await db_manager.db.inventory_reservations.update_one(
         {"_id": reservation["_id"]},
@@ -216,12 +231,19 @@ async def handle_order_events(event_data: dict):
         items = payload.get("items", [])
         await reserve_stock_atomic(order_id, items, correlation_id)
 
-    elif event_type in [EventType.PAYMENT_FAILED.value, EventType.ORDER_CANCELLED.value]:
-        logger.info(f"Handling {event_type} event: releasing reservation for order {order_id}")
+    elif event_type in [
+        EventType.PAYMENT_FAILED.value,
+        EventType.ORDER_CANCELLED.value,
+    ]:
+        logger.info(
+            f"Handling {event_type} event: releasing reservation for order {order_id}"
+        )
         await release_reservation(order_id, reason=event_type)
 
     elif event_type == EventType.ORDER_CONFIRMED.value:
-        logger.info(f"Handling OrderConfirmed event: finalizing sale for order {order_id}")
+        logger.info(
+            f"Handling OrderConfirmed event: finalizing sale for order {order_id}"
+        )
         await confirm_reservation(order_id)
 
 
@@ -351,7 +373,7 @@ async def get_inventory(product_id: str):
     )
 
 
-@app.get("/api/v1/inventory", response_model=List[InventoryItemResponse])
+@app.get("/api/v1/inventory", response_model=list[InventoryItemResponse])
 async def list_all_inventory(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -387,9 +409,13 @@ async def list_all_inventory(
 async def create_inventory(
     item_in: InventoryItemCreate, user: TokenUser = Depends(get_current_user)
 ):
-    existing = await db_manager.db.inventory.find_one({"product_id": item_in.product_id})
+    existing = await db_manager.db.inventory.find_one(
+        {"product_id": item_in.product_id}
+    )
     if existing:
-        raise HTTPException(status_code=409, detail="Inventory already exists for this product")
+        raise HTTPException(
+            status_code=409, detail="Inventory already exists for this product"
+        )
 
     now = utc_now()
     doc = {
@@ -440,15 +466,17 @@ async def adjust_stock(
             "$set": {"updated_at": now},
         },
     )
-    await db_manager.db.inventory_txs.insert_one({
-        "tx_id": str(uuid.uuid4()),
-        "product_id": product_id,
-        "type": "MANUAL_ADJUSTMENT",
-        "quantity": adjust_in.adjustment,
-        "reason": adjust_in.reason,
-        "user_id": user.user_id,
-        "created_at": now,
-    })
+    await db_manager.db.inventory_txs.insert_one(
+        {
+            "tx_id": str(uuid.uuid4()),
+            "product_id": product_id,
+            "type": "MANUAL_ADJUSTMENT",
+            "quantity": adjust_in.adjustment,
+            "reason": adjust_in.reason,
+            "user_id": user.user_id,
+            "created_at": now,
+        }
+    )
 
     return await get_inventory(product_id)
 
@@ -464,4 +492,3 @@ async def manual_reserve_stock(req: ReserveStockRequest):
     if not success:
         raise HTTPException(status_code=400, detail="Insufficient stock")
     return {"status": "reserved", "order_id": req.order_id}
-

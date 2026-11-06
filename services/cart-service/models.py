@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class CartItemAdd(BaseModel):
@@ -21,14 +21,13 @@ class CartItemResponse(BaseModel):
     product_name: str
     unit_price: int  # in minor units (cents)
     quantity: int
-    image_url: Optional[str] = None
+    image_url: str | None = None
     subtotal: int
 
 
 class CartResponse(BaseModel):
     user_id: str
-    items: List[CartItemResponse] = []
+    items: list[CartItemResponse] = []
     total_amount: int
     total_items: int
     updated_at: datetime
-

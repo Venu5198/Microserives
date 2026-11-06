@@ -1,21 +1,20 @@
 import os
 import uuid
 from contextlib import asynccontextmanager
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, status
-from motor.motor_asyncio import AsyncIOMotorClient
-from prometheus_client import Counter, Histogram, make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
+from ecommerce_common.database import serialize_doc
 from ecommerce_common.logging import setup_logger
 from ecommerce_common.middleware import register_base_middlewares
 from ecommerce_common.security import (
-    get_current_user_dependency,
     TokenUser,
+    get_current_user_dependency,
     require_roles,
 )
-from ecommerce_common.database import serialize_doc
-from models import ProductCreate, ProductUpdate, ProductResponse, utc_now
+from fastapi import Depends, FastAPI, HTTPException, Query, status
+from models import ProductCreate, ProductResponse, ProductUpdate, utc_now
+from motor.motor_asyncio import AsyncIOMotorClient
+from prometheus_client import make_asgi_app
 
 logger = setup_logger("product-service")
 
@@ -27,14 +26,16 @@ class Settings(BaseServiceSettings):
 
 
 settings = Settings()
-client: Optional[AsyncIOMotorClient] = None
+client: AsyncIOMotorClient | None = None
 db = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global client, db
-    logger.info(f"Connecting to MongoDB at {settings.MONGO_URI} ({settings.DATABASE_NAME})")
+    logger.info(
+        f"Connecting to MongoDB at {settings.MONGO_URI} ({settings.DATABASE_NAME})"
+    )
     client = AsyncIOMotorClient(settings.MONGO_URI)
     db = client[settings.DATABASE_NAME]
 
@@ -97,7 +98,9 @@ async def lifespan(app: FastAPI):
             },
         ]
         await db.products.insert_many(sample_products)
-        logger.info(f"Seeded {len(sample_products)} sample products into {settings.DATABASE_NAME}")
+        logger.info(
+            f"Seeded {len(sample_products)} sample products into {settings.DATABASE_NAME}"
+        )
 
     yield
     client.close()
@@ -128,10 +131,10 @@ async def ready():
         raise HTTPException(status_code=503, detail=f"Database unready: {e}")
 
 
-@app.get("/api/v1/products", response_model=List[ProductResponse])
+@app.get("/api/v1/products", response_model=list[ProductResponse])
 async def list_products(
-    category: Optional[str] = None,
-    search: Optional[str] = None,
+    category: str | None = None,
+    search: str | None = None,
     active_only: bool = True,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -149,7 +152,7 @@ async def list_products(
     return [ProductResponse(**serialize_doc(item)) for item in items]
 
 
-@app.get("/api/v1/products/categories", response_model=List[str])
+@app.get("/api/v1/products/categories", response_model=list[str])
 async def list_categories():
     categories = await db.products.distinct("category", {"is_active": True})
     return categories
@@ -174,7 +177,9 @@ async def create_product(
 ):
     existing_sku = await db.products.find_one({"sku": product_in.sku})
     if existing_sku:
-        raise HTTPException(status_code=409, detail=f"Product SKU {product_in.sku} already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Product SKU {product_in.sku} already exists"
+        )
 
     product_id = f"prod-{uuid.uuid4().hex[:8]}"
     now = utc_now()
@@ -202,7 +207,9 @@ async def update_product(
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    update_fields = {k: v for k, v in product_update.model_dump().items() if v is not None}
+    update_fields = {
+        k: v for k, v in product_update.model_dump().items() if v is not None
+    }
     if not update_fields:
         return ProductResponse(**serialize_doc(existing))
 
@@ -228,4 +235,3 @@ async def delete_product(product_id: str, user: TokenUser = Depends(get_current_
         {"$set": {"is_active": False, "updated_at": utc_now()}},
     )
     logger.info(f"Product {product_id} deactivated by admin {user.user_id}")
-

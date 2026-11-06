@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -39,13 +40,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_jwt_token(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     secret_key: str,
     algorithm: str = "HS256",
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     to_encode = payload.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
@@ -58,7 +59,7 @@ def decode_jwt_token(
     token: str,
     secret_key: str,
     algorithm: str = "HS256",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return jwt.decode(token, secret_key, algorithms=[algorithm])
     except jwt.ExpiredSignatureError:
@@ -77,7 +78,7 @@ def decode_jwt_token(
 
 def get_current_user_dependency(secret_key: str, algorithm: str = "HS256"):
     async def get_current_user(
-        credentials: Optional[HTTPAuthorizationCredentials] = Security(security_scheme),
+        credentials: HTTPAuthorizationCredentials | None = Security(security_scheme),
     ) -> TokenUser:
         if not credentials:
             raise HTTPException(
@@ -99,7 +100,7 @@ def get_current_user_dependency(secret_key: str, algorithm: str = "HS256"):
     return get_current_user
 
 
-def require_roles(allowed_roles: List[str]):
+def require_roles(allowed_roles: list[str]):
     def role_checker(user: TokenUser) -> TokenUser:
         if user.role not in allowed_roles:
             raise HTTPException(
@@ -109,4 +110,3 @@ def require_roles(allowed_roles: List[str]):
         return user
 
     return role_checker
-

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class PaymentStatus(str, Enum):
@@ -27,7 +27,7 @@ class PaymentCreateRequest(BaseModel):
 
 
 class RefundRequest(BaseModel):
-    amount: Optional[int] = None
+    amount: int | None = None
     reason: str = Field(min_length=3, default="Customer return")
     idempotency_key: str = Field(min_length=8)
 
@@ -38,9 +38,9 @@ class PaymentResponse(BaseModel):
     amount: int
     currency: str
     status: PaymentStatus
-    transaction_id: Optional[str] = None
-    card_last_four: Optional[str] = None
-    failure_reason: Optional[str] = None
+    transaction_id: str | None = None
+    card_last_four: str | None = None
+    failure_reason: str | None = None
     idempotency_key: str
     created_at: datetime
     updated_at: datetime
@@ -55,4 +55,3 @@ class RefundResponse(BaseModel):
     gateway_refund_id: str
     reason: str
     created_at: datetime
-

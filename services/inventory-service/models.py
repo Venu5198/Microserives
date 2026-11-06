@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class InventoryItemCreate(BaseModel):
@@ -37,5 +37,4 @@ class ReserveItemRequest(BaseModel):
 
 class ReserveStockRequest(BaseModel):
     order_id: str
-    items: List[ReserveItemRequest]
-
+    items: list[ReserveItemRequest]

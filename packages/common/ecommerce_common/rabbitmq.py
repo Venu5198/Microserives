@@ -1,9 +1,11 @@
 import asyncio
 import json
 import logging
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
+
 import aio_pika
-from aio_pika import ExchangeType, Message, DeliveryMode
+from aio_pika import DeliveryMode, ExchangeType, Message
 
 logger = logging.getLogger("rabbitmq-client")
 
@@ -18,10 +20,10 @@ class RabbitMQClient:
         self.rabbitmq_url = rabbitmq_url
         self.exchange_name = exchange_name
         self.dlx_exchange_name = dlx_exchange_name
-        self.connection: Optional[aio_pika.RobustConnection] = None
-        self.channel: Optional[aio_pika.RobustChannel] = None
-        self.exchange: Optional[aio_pika.RobustExchange] = None
-        self.dlx_exchange: Optional[aio_pika.RobustExchange] = None
+        self.connection: aio_pika.RobustConnection | None = None
+        self.channel: aio_pika.RobustChannel | None = None
+        self.exchange: aio_pika.RobustExchange | None = None
+        self.dlx_exchange: aio_pika.RobustExchange | None = None
 
     async def connect(self):
         retries = 5
@@ -45,7 +47,9 @@ class RabbitMQClient:
                     ExchangeType.TOPIC,
                     durable=True,
                 )
-                logger.info(f"Connected to RabbitMQ and declared exchanges: {self.exchange_name}, {self.dlx_exchange_name}")
+                logger.info(
+                    f"Connected to RabbitMQ and declared exchanges: {self.exchange_name}, {self.dlx_exchange_name}"
+                )
                 return
             except Exception as e:
                 logger.warning(f"RabbitMQ connection attempt {attempt} failed: {e}")
@@ -61,8 +65,8 @@ class RabbitMQClient:
     async def publish_event(
         self,
         routing_key: str,
-        envelope: Dict[str, Any],
-        headers: Optional[Dict[str, Any]] = None,
+        envelope: dict[str, Any],
+        headers: dict[str, Any] | None = None,
     ):
         if not self.exchange:
             raise RuntimeError("RabbitMQ exchange not initialized")
@@ -86,7 +90,7 @@ class RabbitMQClient:
         self,
         queue_name: str,
         routing_keys: list[str],
-        message_handler: Callable[[Dict[str, Any]], Any],
+        message_handler: Callable[[dict[str, Any]], Any],
         max_retries: int = 3,
     ):
         """
@@ -131,4 +135,3 @@ class RabbitMQClient:
 
         asyncio.create_task(_consumer())
         logger.info(f"Consumer started on queue: {queue_name} for keys: {routing_keys}")
-

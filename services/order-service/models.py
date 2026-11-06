@@ -1,11 +1,12 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class OrderStatus(str, Enum):
@@ -42,7 +43,7 @@ class ShippingAddressInput(BaseModel):
 
 
 class OrderCreateRequest(BaseModel):
-    items: List[OrderItemInput] = Field(min_length=1)
+    items: list[OrderItemInput] = Field(min_length=1)
     shipping_address: ShippingAddressInput
     payment_method: str = "sandbox_credit_card"
 
@@ -64,13 +65,12 @@ class OrderResponse(BaseModel):
     order_number: str
     customer_id: str
     customer_email: str
-    items: List[OrderItemResponse]
+    items: list[OrderItemResponse]
     total_amount: int
     status: str
-    shipping_address: Dict[str, Any]
-    payment_id: Optional[str] = None
-    tracking_number: Optional[str] = None
-    cancellation_reason: Optional[str] = None
+    shipping_address: dict[str, Any]
+    payment_id: str | None = None
+    tracking_number: str | None = None
+    cancellation_reason: str | None = None
     created_at: datetime
     updated_at: datetime
-

@@ -1,35 +1,33 @@
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, status
-from motor.motor_asyncio import AsyncIOMotorClient
-from prometheus_client import Counter, Histogram, make_asgi_app
+from datetime import UTC, timedelta
 
 from ecommerce_common.config import BaseServiceSettings
+from ecommerce_common.database import serialize_doc
 from ecommerce_common.logging import setup_logger
 from ecommerce_common.middleware import register_base_middlewares
 from ecommerce_common.security import (
-    hash_password,
-    verify_password,
-    create_jwt_token,
-    decode_jwt_token,
-    get_current_user_dependency,
     TokenUser,
+    create_jwt_token,
+    get_current_user_dependency,
+    hash_password,
     require_roles,
+    verify_password,
 )
-from ecommerce_common.database import serialize_doc
+from fastapi import Depends, FastAPI, HTTPException, status
 from models import (
-    UserRegisterRequest,
-    UserLoginRequest,
-    TokenResponse,
-    RefreshTokenRequest,
-    UserProfileResponse,
     AddressCreate,
     AddressResponse,
+    RefreshTokenRequest,
+    TokenResponse,
+    UserLoginRequest,
+    UserProfileResponse,
+    UserRegisterRequest,
     utc_now,
 )
+from motor.motor_asyncio import AsyncIOMotorClient
+from prometheus_client import Counter, Histogram, make_asgi_app
 
 logger = setup_logger("user-service")
 
@@ -41,17 +39,23 @@ class Settings(BaseServiceSettings):
 
 
 settings = Settings()
-client: Optional[AsyncIOMotorClient] = None
+client: AsyncIOMotorClient | None = None
 db = None
 
-REQUEST_COUNT = Counter("http_requests_total", "Total HTTP Requests", ["method", "endpoint", "status"])
-REQUEST_LATENCY = Histogram("http_request_duration_seconds", "HTTP Request Duration", ["endpoint"])
+REQUEST_COUNT = Counter(
+    "http_requests_total", "Total HTTP Requests", ["method", "endpoint", "status"]
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds", "HTTP Request Duration", ["endpoint"]
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global client, db
-    logger.info(f"Connecting to MongoDB at {settings.MONGO_URI} ({settings.DATABASE_NAME})")
+    logger.info(
+        f"Connecting to MongoDB at {settings.MONGO_URI} ({settings.DATABASE_NAME})"
+    )
     client = AsyncIOMotorClient(settings.MONGO_URI)
     db = client[settings.DATABASE_NAME]
 
@@ -106,7 +110,11 @@ async def ready():
         raise HTTPException(status_code=503, detail=f"Database unready: {e}")
 
 
-@app.post("/api/v1/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/api/v1/auth/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def register(request: UserRegisterRequest):
     existing = await db.users.find_one({"email": request.email.lower()})
     if existing:
@@ -140,13 +148,16 @@ async def register(request: UserRegisterRequest):
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     refresh_token = str(uuid.uuid4())
-    await db.refresh_tokens.insert_one({
-        "token": refresh_token,
-        "user_id": user_id,
-        "expires_at": utc_now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        "revoked": False,
-        "created_at": utc_now(),
-    })
+    await db.refresh_tokens.insert_one(
+        {
+            "token": refresh_token,
+            "user_id": user_id,
+            "expires_at": utc_now()
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "revoked": False,
+            "created_at": utc_now(),
+        }
+    )
 
     return TokenResponse(
         access_token=access_token,
@@ -178,13 +189,16 @@ async def login(request: UserLoginRequest):
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     refresh_token = str(uuid.uuid4())
-    await db.refresh_tokens.insert_one({
-        "token": refresh_token,
-        "user_id": user_id,
-        "expires_at": utc_now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        "revoked": False,
-        "created_at": utc_now(),
-    })
+    await db.refresh_tokens.insert_one(
+        {
+            "token": refresh_token,
+            "user_id": user_id,
+            "expires_at": utc_now()
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "revoked": False,
+            "created_at": utc_now(),
+        }
+    )
 
     return TokenResponse(
         access_token=access_token,
@@ -197,22 +211,32 @@ async def login(request: UserLoginRequest):
 
 @app.post("/api/v1/auth/refresh", response_model=TokenResponse)
 async def refresh_token(request: RefreshTokenRequest):
-    token_doc = await db.refresh_tokens.find_one({"token": request.refresh_token, "revoked": False})
+    token_doc = await db.refresh_tokens.find_one(
+        {"token": request.refresh_token, "revoked": False}
+    )
     if not token_doc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
 
     expires_at = token_doc["expires_at"]
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at < utc_now():
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired"
+        )
 
     # Rotate refresh token
-    await db.refresh_tokens.update_one({"_id": token_doc["_id"]}, {"$set": {"revoked": True}})
+    await db.refresh_tokens.update_one(
+        {"_id": token_doc["_id"]}, {"$set": {"revoked": True}}
+    )
 
     user = await db.users.find_one({"_id": token_doc["user_id"]})
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     user_id = str(user["_id"])
     new_access_token = create_jwt_token(
@@ -221,13 +245,16 @@ async def refresh_token(request: RefreshTokenRequest):
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     new_refresh_token = str(uuid.uuid4())
-    await db.refresh_tokens.insert_one({
-        "token": new_refresh_token,
-        "user_id": user_id,
-        "expires_at": utc_now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        "revoked": False,
-        "created_at": utc_now(),
-    })
+    await db.refresh_tokens.insert_one(
+        {
+            "token": new_refresh_token,
+            "user_id": user_id,
+            "expires_at": utc_now()
+            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "revoked": False,
+            "created_at": utc_now(),
+        }
+    )
 
     return TokenResponse(
         access_token=new_access_token,
@@ -239,7 +266,9 @@ async def refresh_token(request: RefreshTokenRequest):
 
 
 @app.post("/api/v1/auth/logout")
-async def logout(request: RefreshTokenRequest, user: TokenUser = Depends(get_current_user)):
+async def logout(
+    request: RefreshTokenRequest, user: TokenUser = Depends(get_current_user)
+):
     await db.refresh_tokens.update_many(
         {"token": request.refresh_token, "user_id": user.user_id},
         {"$set": {"revoked": True, "revoked_at": utc_now()}},
@@ -297,7 +326,9 @@ async def add_address(
     doc["created_at"] = utc_now()
 
     await db.addresses.insert_one(doc)
-    return AddressResponse(id=addr_id, **address_in.model_dump(), created_at=doc["created_at"])
+    return AddressResponse(
+        id=addr_id, **address_in.model_dump(), created_at=doc["created_at"]
+    )
 
 
 @app.get("/api/v1/users", dependencies=[Depends(require_roles(["ADMIN"]))])
@@ -305,4 +336,3 @@ async def list_all_users(user: TokenUser = Depends(get_current_user)):
     cursor = db.users.find().limit(100)
     users = await cursor.to_list(100)
     return [serialize_doc(u) for u in users]
-

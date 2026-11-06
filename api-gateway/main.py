@@ -3,15 +3,14 @@ import time
 import uuid
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from typing import Dict, Optional
+
 import httpx
-from fastapi import FastAPI, Request, Response, HTTPException, status
+from ecommerce_common.config import BaseServiceSettings
+from ecommerce_common.logging import correlation_id_ctx, setup_logger
+from ecommerce_common.security import decode_jwt_token
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, make_asgi_app
-
-from ecommerce_common.config import BaseServiceSettings
-from ecommerce_common.logging import setup_logger, correlation_id_ctx
-from ecommerce_common.security import decode_jwt_token
 
 logger = setup_logger("api-gateway")
 
@@ -23,24 +22,36 @@ class GatewaySettings(BaseServiceSettings):
     # Downstream service URLs
     USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
     PRODUCT_SERVICE_URL: str = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8002")
-    INVENTORY_SERVICE_URL: str = os.getenv("INVENTORY_SERVICE_URL", "http://localhost:8003")
+    INVENTORY_SERVICE_URL: str = os.getenv(
+        "INVENTORY_SERVICE_URL", "http://localhost:8003"
+    )
     CART_SERVICE_URL: str = os.getenv("CART_SERVICE_URL", "http://localhost:8004")
     ORDER_SERVICE_URL: str = os.getenv("ORDER_SERVICE_URL", "http://localhost:8005")
     PAYMENT_SERVICE_URL: str = os.getenv("PAYMENT_SERVICE_URL", "http://localhost:8006")
-    SHIPPING_SERVICE_URL: str = os.getenv("SHIPPING_SERVICE_URL", "http://localhost:8007")
-    NOTIFICATION_SERVICE_URL: str = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8008")
+    SHIPPING_SERVICE_URL: str = os.getenv(
+        "SHIPPING_SERVICE_URL", "http://localhost:8007"
+    )
+    NOTIFICATION_SERVICE_URL: str = os.getenv(
+        "NOTIFICATION_SERVICE_URL", "http://localhost:8008"
+    )
 
 
 settings = GatewaySettings()
-http_client: Optional[httpx.AsyncClient] = None
+http_client: httpx.AsyncClient | None = None
 
 # In-memory sliding window rate limiter: IP -> list of timestamps
 rate_limit_records = defaultdict(list)
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_REQUESTS = 200
 
-REQUEST_COUNT = Counter("gateway_requests_total", "Total requests routed via gateway", ["service", "method", "status"])
-REQUEST_LATENCY = Histogram("gateway_request_duration_seconds", "Gateway request latency", ["service"])
+REQUEST_COUNT = Counter(
+    "gateway_requests_total",
+    "Total requests routed via gateway",
+    ["service", "method", "status"],
+)
+REQUEST_LATENCY = Histogram(
+    "gateway_request_duration_seconds", "Gateway request latency", ["service"]
+)
 
 
 @asynccontextmanager
@@ -128,20 +139,29 @@ async def health_aggregation():
     }
 
 
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+@app.api_route(
+    "/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+)
 async def route_proxy(request: Request, path: str):
     full_path = f"/{path}"
     target_base, service_name = get_service_route(full_path)
 
     if not target_base:
-        raise HTTPException(status_code=404, detail=f"No route found for path '{full_path}'")
+        raise HTTPException(
+            status_code=404, detail=f"No route found for path '{full_path}'"
+        )
 
     # Rate Limiting
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
-    rate_limit_records[client_ip] = [t for t in rate_limit_records[client_ip] if now - t < RATE_LIMIT_WINDOW_SECONDS]
+    rate_limit_records[client_ip] = [
+        t for t in rate_limit_records[client_ip] if now - t < RATE_LIMIT_WINDOW_SECONDS
+    ]
     if len(rate_limit_records[client_ip]) >= RATE_LIMIT_MAX_REQUESTS:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded. Please slow down.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please slow down.",
+        )
     rate_limit_records[client_ip].append(now)
 
     # Correlation ID
@@ -149,7 +169,11 @@ async def route_proxy(request: Request, path: str):
     correlation_id_ctx.set(corr_id)
 
     # Forward headers
-    forward_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length"]}
+    forward_headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ["host", "content-length"]
+    }
     forward_headers["X-Correlation-ID"] = corr_id
 
     # Token Validation & Identity Extraction
@@ -157,7 +181,9 @@ async def route_proxy(request: Request, path: str):
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
-            decoded = decode_jwt_token(token, settings.JWT_SECRET_KEY, settings.JWT_ALGORITHM)
+            decoded = decode_jwt_token(
+                token, settings.JWT_SECRET_KEY, settings.JWT_ALGORITHM
+            )
             forward_headers["X-User-Id"] = decoded.get("sub", "")
             forward_headers["X-User-Email"] = decoded.get("email", "")
             forward_headers["X-User-Role"] = decoded.get("role", "")
@@ -180,7 +206,11 @@ async def route_proxy(request: Request, path: str):
             content=body,
         )
         duration = time.time() - start_time
-        REQUEST_COUNT.labels(service=service_name, method=request.method, status=downstream_resp.status_code).inc()
+        REQUEST_COUNT.labels(
+            service=service_name,
+            method=request.method,
+            status=downstream_resp.status_code,
+        ).inc()
         REQUEST_LATENCY.labels(service=service_name).observe(duration)
 
         response_headers = dict(downstream_resp.headers)
@@ -196,9 +226,13 @@ async def route_proxy(request: Request, path: str):
             media_type=downstream_resp.headers.get("content-type"),
         )
     except httpx.ConnectError:
-        logger.error(f"Failed to connect to downstream service '{service_name}' at {target_url}")
-        raise HTTPException(status_code=503, detail=f"Service '{service_name}' is temporarily unavailable")
+        logger.error(
+            f"Failed to connect to downstream service '{service_name}' at {target_url}"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service '{service_name}' is temporarily unavailable",
+        )
     except Exception as e:
         logger.error(f"Gateway proxy error: {e}", exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Bad Gateway: {str(e)}")
-
+        raise HTTPException(status_code=502, detail=f"Bad Gateway: {e!s}")

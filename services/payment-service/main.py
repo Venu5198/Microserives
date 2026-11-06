@@ -1,31 +1,31 @@
 import os
 import uuid
 from contextlib import asynccontextmanager
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
-from pymongo.errors import DuplicateKeyError
-from prometheus_client import make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
-from ecommerce_common.logging import setup_logger, correlation_id_ctx
+from ecommerce_common.database import DatabaseManager
+from ecommerce_common.logging import correlation_id_ctx, setup_logger
 from ecommerce_common.middleware import register_base_middlewares
+from ecommerce_common.outbox_worker import OutboxWorker
+from ecommerce_common.rabbitmq import RabbitMQClient
 from ecommerce_common.security import (
-    get_current_user_dependency,
     TokenUser,
+    get_current_user_dependency,
     require_roles,
 )
-from ecommerce_common.database import serialize_doc, DatabaseManager
-from ecommerce_common.rabbitmq import RabbitMQClient
-from ecommerce_common.outbox_worker import OutboxWorker
-from contracts.events.types import EventType
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from models import (
     PaymentCreateRequest,
-    RefundRequest,
     PaymentResponse,
-    RefundResponse,
     PaymentStatus,
+    RefundRequest,
+    RefundResponse,
     utc_now,
 )
+from prometheus_client import make_asgi_app
+from pymongo.errors import DuplicateKeyError
+
+from contracts.events.types import EventType
 
 logger = setup_logger("payment-service")
 
@@ -38,8 +38,10 @@ class Settings(BaseServiceSettings):
 
 settings = Settings()
 db_manager = DatabaseManager(settings.MONGO_URI, settings.DATABASE_NAME)
-rabbitmq_client = RabbitMQClient(settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME)
-outbox_worker: Optional[OutboxWorker] = None
+rabbitmq_client = RabbitMQClient(
+    settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME
+)
+outbox_worker: OutboxWorker | None = None
 
 
 async def execute_payment(
@@ -55,22 +57,32 @@ async def execute_payment(
     Executes payment against the sandbox gateway with idempotency check.
     """
     now = utc_now()
-    existing_key = await db_manager.db.idempotency_keys.find_one({"_id": idempotency_key})
+    existing_key = await db_manager.db.idempotency_keys.find_one(
+        {"_id": idempotency_key}
+    )
     if existing_key:
         logger.info(f"Idempotent payment replay detected for key {idempotency_key}")
-        payment_doc = await db_manager.db.payments.find_one({"_id": existing_key["payment_id"]})
+        payment_doc = await db_manager.db.payments.find_one(
+            {"_id": existing_key["payment_id"]}
+        )
         return payment_doc
 
     payment_id = f"pay-{uuid.uuid4().hex[:10]}"
     try:
-        await db_manager.db.idempotency_keys.insert_one({
-            "_id": idempotency_key,
-            "payment_id": payment_id,
-            "created_at": now,
-        })
+        await db_manager.db.idempotency_keys.insert_one(
+            {
+                "_id": idempotency_key,
+                "payment_id": payment_id,
+                "created_at": now,
+            }
+        )
     except DuplicateKeyError:
-        existing_key = await db_manager.db.idempotency_keys.find_one({"_id": idempotency_key})
-        payment_doc = await db_manager.db.payments.find_one({"_id": existing_key["payment_id"]})
+        existing_key = await db_manager.db.idempotency_keys.find_one(
+            {"_id": idempotency_key}
+        )
+        payment_doc = await db_manager.db.payments.find_one(
+            {"_id": existing_key["payment_id"]}
+        )
         return payment_doc
 
     if simulate_failure or card_last_four == "0002":
@@ -134,7 +146,9 @@ async def execute_payment(
                 "gateway": "sandbox",
             },
         )
-        logger.info(f"Payment {payment_id} succeeded for order {order_id} (TX: {tx_id})")
+        logger.info(
+            f"Payment {payment_id} succeeded for order {order_id} (TX: {tx_id})"
+        )
 
     return payment_doc
 
@@ -148,15 +162,20 @@ async def handle_payment_events(event_data: dict):
         order_id = payload.get("order_id")
         amount = payload.get("amount")
         currency = payload.get("currency", "USD")
+        payment_method = payload.get("payment_method", "sandbox_credit_card")
+        simulate_failure = payment_method == "card_simulate_decline"
         idempotency_key = f"idem-order-{order_id}"
 
-        logger.info(f"Auto-processing PaymentInitiated event for order {order_id}")
+        logger.info(
+            f"Auto-processing PaymentInitiated event for order {order_id} (simulate_failure={simulate_failure})"
+        )
         await execute_payment(
             order_id=order_id,
             amount=amount,
             currency=currency,
             idempotency_key=idempotency_key,
             correlation_id=correlation_id,
+            simulate_failure=simulate_failure,
         )
 
     elif event_type == EventType.REFUND_INITIATED.value:
@@ -259,7 +278,11 @@ async def ready():
         raise HTTPException(status_code=503, detail=f"Database unready: {e}")
 
 
-@app.post("/api/v1/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/api/v1/payments",
+    response_model=PaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def process_payment(
     request: PaymentCreateRequest,
     user: TokenUser = Depends(get_current_user),
@@ -312,12 +335,18 @@ async def get_payment(
     )
 
 
-@app.get("/api/v1/payments", response_model=List[PaymentResponse], dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))])
+@app.get(
+    "/api/v1/payments",
+    response_model=list[PaymentResponse],
+    dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))],
+)
 async def list_payments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    cursor = db_manager.db.payments.find().sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        db_manager.db.payments.find().sort("created_at", -1).skip(skip).limit(limit)
+    )
     items = await cursor.to_list(length=limit)
     return [
         PaymentResponse(
@@ -347,7 +376,9 @@ async def refund_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     if payment["status"] != PaymentStatus.SUCCEEDED.value:
-        raise HTTPException(status_code=400, detail="Only successful payments can be refunded")
+        raise HTTPException(
+            status_code=400, detail="Only successful payments can be refunded"
+        )
 
     corr_id = correlation_id_ctx.get()
     refund_id = f"ref-{uuid.uuid4().hex[:10]}"
@@ -396,4 +427,3 @@ async def refund_payment(
         reason=request.reason,
         created_at=now,
     )
-

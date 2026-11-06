@@ -1,8 +1,8 @@
 import json
 import logging
 import sys
-from datetime import datetime, timezone
 from contextvars import ContextVar
+from datetime import UTC, datetime
 
 correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="n/a")
 
@@ -14,7 +14,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "service": self.service_name,
             "correlation_id": correlation_id_ctx.get(),
@@ -35,5 +35,13 @@ def setup_logger(service_name: str, level: str = "INFO") -> logging.Logger:
     handler.setFormatter(JSONFormatter(service_name=service_name))
     logger.addHandler(handler)
     logger.propagate = False
-    return logger
 
+    # Also attach formatter to root and common loggers
+    for log_name in ["rabbitmq-client", "outbox-worker"]:
+        sub_logger = logging.getLogger(log_name)
+        sub_logger.setLevel(level.upper())
+        sub_logger.handlers.clear()
+        sub_logger.addHandler(handler)
+        sub_logger.propagate = False
+
+    return logger

@@ -1,4 +1,3 @@
-import pytest
 from contracts.events.types import EventType
 
 
@@ -16,46 +15,56 @@ class MockSagaOrchestrator:
             "amount": amount,
         }
         self.saga_state[order_id] = "STARTED"
-        self.events_published.append({
-            "event_type": EventType.ORDER_CREATED.value,
-            "order_id": order_id,
-        })
+        self.events_published.append(
+            {
+                "event_type": EventType.ORDER_CREATED.value,
+                "order_id": order_id,
+            }
+        )
 
     def handle_inventory_reserved(self, order_id: str):
         self.saga_state[order_id] = "INVENTORY_RESERVED"
         self.orders[order_id]["status"] = "AWAITING_PAYMENT"
-        self.events_published.append({
-            "event_type": EventType.PAYMENT_INITIATED.value,
-            "order_id": order_id,
-        })
+        self.events_published.append(
+            {
+                "event_type": EventType.PAYMENT_INITIATED.value,
+                "order_id": order_id,
+            }
+        )
 
     def handle_inventory_failed(self, order_id: str, reason: str):
         self.saga_state[order_id] = "FAILED"
         self.orders[order_id]["status"] = "CANCELLED"
         self.orders[order_id]["reason"] = reason
-        self.events_published.append({
-            "event_type": EventType.ORDER_CANCELLED.value,
-            "order_id": order_id,
-        })
+        self.events_published.append(
+            {
+                "event_type": EventType.ORDER_CANCELLED.value,
+                "order_id": order_id,
+            }
+        )
 
     def handle_payment_succeeded(self, order_id: str):
         self.saga_state[order_id] = "COMPLETED"
         self.orders[order_id]["status"] = "CONFIRMED"
-        self.events_published.append({
-            "event_type": EventType.ORDER_CONFIRMED.value,
-            "order_id": order_id,
-        })
+        self.events_published.append(
+            {
+                "event_type": EventType.ORDER_CONFIRMED.value,
+                "order_id": order_id,
+            }
+        )
 
     def handle_payment_failed(self, order_id: str):
         # Compensation: release inventory reservation
         self.saga_state[order_id] = "COMPENSATING"
         self.orders[order_id]["status"] = "CANCELLED"
         self.orders[order_id]["reason"] = "Payment Failed"
-        self.events_published.append({
-            "event_type": EventType.ORDER_CANCELLED.value,
-            "order_id": order_id,
-            "inventory_release_required": True,
-        })
+        self.events_published.append(
+            {
+                "event_type": EventType.ORDER_CANCELLED.value,
+                "order_id": order_id,
+                "inventory_release_required": True,
+            }
+        )
 
 
 def test_happy_path_saga():
@@ -106,4 +115,3 @@ def test_payment_failure_compensation():
     assert saga.saga_state[order_id] == "COMPENSATING"
     assert saga.events_published[-1]["event_type"] == "OrderCancelled"
     assert saga.events_published[-1]["inventory_release_required"] is True
-

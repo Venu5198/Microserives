@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
-from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field
+from datetime import UTC, datetime
+
+from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class UserRole(str):
@@ -33,7 +33,7 @@ class UserRegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     first_name: str
     last_name: str
-    role: Optional[str] = "CUSTOMER"
+    role: str | None = "CUSTOMER"
 
 
 class UserLoginRequest(BaseModel):
@@ -61,6 +61,5 @@ class UserProfileResponse(BaseModel):
     last_name: str
     role: str
     is_active: bool
-    addresses: List[AddressResponse] = []
+    addresses: list[AddressResponse] = []
     created_at: datetime
-

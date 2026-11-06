@@ -1,10 +1,11 @@
-import pytest
 from datetime import timedelta
+
+import pytest
 from ecommerce_common.security import (
-    hash_password,
-    verify_password,
     create_jwt_token,
     decode_jwt_token,
+    hash_password,
+    verify_password,
 )
 from fastapi import HTTPException
 
@@ -22,7 +23,9 @@ def test_jwt_token_lifecycle():
     secret = "testsecretkeymustbeatleast32byteslongforsecurity"
     payload = {"sub": "user-123", "email": "test@example.com", "role": "CUSTOMER"}
 
-    token = create_jwt_token(payload, secret_key=secret, expires_delta=timedelta(minutes=15))
+    token = create_jwt_token(
+        payload, secret_key=secret, expires_delta=timedelta(minutes=15)
+    )
     decoded = decode_jwt_token(token, secret_key=secret)
 
     assert decoded["sub"] == "user-123"
@@ -35,4 +38,3 @@ def test_jwt_invalid_token():
     with pytest.raises(HTTPException) as exc_info:
         decode_jwt_token("invalid.token.string", secret_key=secret)
     assert exc_info.value.status_code == 401
-

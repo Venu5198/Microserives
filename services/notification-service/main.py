@@ -5,22 +5,21 @@ import uuid
 from contextlib import asynccontextmanager
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, status
-from prometheus_client import make_asgi_app
 
 from ecommerce_common.config import BaseServiceSettings
+from ecommerce_common.database import DatabaseManager, serialize_doc
 from ecommerce_common.logging import setup_logger
 from ecommerce_common.middleware import register_base_middlewares
+from ecommerce_common.rabbitmq import RabbitMQClient
 from ecommerce_common.security import (
     get_current_user_dependency,
-    TokenUser,
     require_roles,
 )
-from ecommerce_common.database import serialize_doc, DatabaseManager
-from ecommerce_common.rabbitmq import RabbitMQClient
+from fastapi import Depends, FastAPI, HTTPException, Query
+from models import NotificationResponse, NotificationSendRequest, utc_now
+from prometheus_client import make_asgi_app
+
 from contracts.events.types import EventType
-from models import NotificationSendRequest, NotificationResponse, utc_now
 
 logger = setup_logger("notification-service")
 
@@ -40,37 +39,39 @@ class Settings(BaseServiceSettings):
 
 settings = Settings()
 db_manager = DatabaseManager(settings.MONGO_URI, settings.DATABASE_NAME)
-rabbitmq_client = RabbitMQClient(settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME)
+rabbitmq_client = RabbitMQClient(
+    settings.RABBITMQ_URL, settings.EXCHANGE_NAME, settings.DLX_EXCHANGE_NAME
+)
 
 
 def render_template(template_name: str, data: dict) -> tuple[str, str]:
     if template_name == "order_confirmed":
         subject = f"Order Confirmed: {data.get('order_number')}"
         body = f"""Hello!
-Your order {data.get('order_number')} has been confirmed!
-Total Amount: ${data.get('total_amount', 0) / 100:.2f}
+Your order {data.get("order_number")} has been confirmed!
+Total Amount: ${data.get("total_amount", 0) / 100:.2f}
 We are packing your items and will notify you when your shipment is on the way.
 Thank you for shopping with us!"""
     elif template_name == "shipment_created":
         subject = f"Your order has shipped! Tracking: {data.get('tracking_number')}"
         body = f"""Great news!
-Your order has been shipped via {data.get('carrier', 'Standard Express')}.
-Tracking Number: {data.get('tracking_number')}
-Estimated Delivery: {data.get('estimated_delivery')}
+Your order has been shipped via {data.get("carrier", "Standard Express")}.
+Tracking Number: {data.get("tracking_number")}
+Estimated Delivery: {data.get("estimated_delivery")}
 Track your package anytime from your customer dashboard."""
     elif template_name == "shipment_status_updated":
         subject = f"Shipment Update for Tracking {data.get('tracking_number')}: {data.get('new_status')}"
-        body = f"""Status update: Your shipment is now {data.get('new_status')} at {data.get('location', 'in transit')}.
-Notes: {data.get('notes', 'No additional details')}"""
+        body = f"""Status update: Your shipment is now {data.get("new_status")} at {data.get("location", "in transit")}.
+Notes: {data.get("notes", "No additional details")}"""
     elif template_name == "order_cancelled":
         subject = f"Order Cancelled: {data.get('order_id')}"
-        body = f"""Your order {data.get('order_id')} has been cancelled.
-Reason: {data.get('reason')}
-{('A full refund has been issued to your original payment method.' if data.get('refund_required') else '')}"""
+        body = f"""Your order {data.get("order_id")} has been cancelled.
+Reason: {data.get("reason")}
+{("A full refund has been issued to your original payment method." if data.get("refund_required") else "")}"""
     elif template_name == "payment_failed":
         subject = "Payment Failed for your Order"
-        body = f"""We were unable to process your payment for order {data.get('order_id')}.
-Reason: {data.get('reason')}
+        body = f"""We were unable to process your payment for order {data.get("order_id")}.
+Reason: {data.get("reason")}
 Please check your payment information."""
     else:
         subject = data.get("subject", "Notification from E-Commerce Platform")
@@ -81,6 +82,7 @@ Please check your payment information."""
 
 async def send_email_async(to_email: str, subject: str, body: str) -> bool:
     """Attempts SMTP transmission, falls back cleanly to simulated dispatch if no SMTP daemon is up."""
+
     def _sync_send():
         try:
             msg = MIMEMultipart()
@@ -89,7 +91,9 @@ async def send_email_async(to_email: str, subject: str, body: str) -> bool:
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain"))
 
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=2.0) as server:
+            with smtplib.SMTP(
+                settings.SMTP_HOST, settings.SMTP_PORT, timeout=2.0
+            ) as server:
                 if settings.SMTP_USER and settings.SMTP_PASSWORD:
                     server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 server.send_message(msg)
@@ -100,7 +104,9 @@ async def send_email_async(to_email: str, subject: str, body: str) -> bool:
     loop = asyncio.get_event_loop()
     success, err = await loop.run_in_executor(None, _sync_send)
     if not success:
-        logger.info(f"Simulated email delivery to {to_email} (SMTP server not reachable: {err})")
+        logger.info(
+            f"Simulated email delivery to {to_email} (SMTP server not reachable: {err})"
+        )
     else:
         logger.info(f"Delivered email via SMTP to {to_email}")
     return True
@@ -110,7 +116,7 @@ async def process_and_log_notification(
     recipient_email: str,
     template_name: str,
     template_data: dict,
-    custom_subject: Optional[str] = None,
+    custom_subject: str | None = None,
 ):
     notif_id = f"notif-{uuid.uuid4().hex[:10]}"
     now = utc_now()
@@ -233,12 +239,20 @@ async def manual_send(req: NotificationSendRequest):
     return NotificationResponse(**serialize_doc(doc))
 
 
-@app.get("/api/v1/notifications", response_model=List[NotificationResponse], dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))])
+@app.get(
+    "/api/v1/notifications",
+    response_model=list[NotificationResponse],
+    dependencies=[Depends(require_roles(["ADMIN", "OPERATIONS"]))],
+)
 async def list_notifications(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    cursor = db_manager.db.notifications.find().sort("created_at", -1).skip(skip).limit(limit)
+    cursor = (
+        db_manager.db.notifications.find()
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
     items = await cursor.to_list(length=limit)
     return [NotificationResponse(**serialize_doc(doc)) for doc in items]
-

@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
+
 from ecommerce_common.database import DatabaseManager
 from ecommerce_common.rabbitmq import RabbitMQClient
 
@@ -23,7 +23,7 @@ class OutboxWorker:
         self.batch_size = batch_size
         self.max_retries = max_retries
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     def start(self):
         if not self._running:
@@ -55,9 +55,11 @@ class OutboxWorker:
         if self.db_manager.db is None:
             return
 
-        cursor = self.db_manager.db.outbox.find(
-            {"status": "PENDING"}
-        ).sort("created_at", 1).limit(self.batch_size)
+        cursor = (
+            self.db_manager.db.outbox.find({"status": "PENDING"})
+            .sort("created_at", 1)
+            .limit(self.batch_size)
+        )
 
         messages = await cursor.to_list(length=self.batch_size)
         if not messages:
@@ -74,7 +76,9 @@ class OutboxWorker:
                 "event_version": 1,
                 "aggregate_id": msg.get("aggregate_id"),
                 "correlation_id": msg.get("correlation_id"),
-                "occurred_at": msg.get("created_at").isoformat() if isinstance(msg.get("created_at"), datetime) else str(msg.get("created_at")),
+                "occurred_at": msg.get("created_at").isoformat()
+                if isinstance(msg.get("created_at"), datetime)
+                else str(msg.get("created_at")),
                 "producer": msg.get("producer"),
                 "payload": msg.get("payload", {}),
             }
@@ -89,8 +93,8 @@ class OutboxWorker:
                     {
                         "$set": {
                             "status": "PUBLISHED",
-                            "published_at": datetime.now(timezone.utc),
-                            "updated_at": datetime.now(timezone.utc),
+                            "published_at": datetime.now(UTC),
+                            "updated_at": datetime.now(UTC),
                         }
                     },
                 )
@@ -107,8 +111,7 @@ class OutboxWorker:
                             "status": new_status,
                             "retry_count": retry_count,
                             "last_error": str(ex),
-                            "updated_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(UTC),
                         }
                     },
                 )
-

@@ -1,12 +1,11 @@
 import json
-from contracts.events.types import EventType
+
 from contracts.events.schemas import (
     EventEnvelope,
     OrderCreatedPayload,
     OrderItemPayload,
-    PaymentSucceededPayload,
-    ShipmentCreatedPayload,
 )
+from contracts.events.types import EventType
 
 
 def test_order_created_event_serialization():
@@ -25,7 +24,12 @@ def test_order_created_event_serialization():
         ],
         total_amount=39998,
         currency="USD",
-        shipping_address={"street": "123 Main St", "city": "NYC", "state": "NY", "postal_code": "10001"},
+        shipping_address={
+            "street": "123 Main St",
+            "city": "NYC",
+            "state": "NY",
+            "postal_code": "10001",
+        },
     )
 
     envelope = EventEnvelope(
@@ -43,4 +47,3 @@ def test_order_created_event_serialization():
     assert data["aggregate_id"] == "ord-001"
     assert data["payload"]["total_amount"] == 39998
     assert len(data["payload"]["items"]) == 1
-
