@@ -1,0 +1,60 @@
+name: Build, Scan & Deploy to GKE
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_LOCATION: us-central1
+  REPOSITORY: ecommerce-repo
+  GKE_CLUSTER: ecommerce-gke-cluster
+  GKE_ZONE: us-central1-a
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        if: env.PROJECT_ID != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        if: env.PROJECT_ID != ''
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        if: env.PROJECT_ID != ''
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+      - name: Build & Scan Docker Images
+        run: |
+          echo "Building microservices images..."
+          docker build -t ecommerce-api-gateway:latest -f api-gateway/Dockerfile .
+          docker build -t ecommerce-order-service:latest -f services/order-service/Dockerfile .
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ecommerce-api-gateway:latest'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Deploy with Helm to GKE
+        if: env.PROJECT_ID != ''
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }}
+          helm upgrade --install ecommerce-platform infrastructure/helm/ecommerce-platform \
+            --namespace ecommerce-prod --create-namespace

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: ecommerce-platform
+description: Production-grade Event-Driven Microservices Helm Chart for Kubernetes / GKE
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - microservices
+  - fastapi
+  - rabbitmq
+  - mongodb
+  - react

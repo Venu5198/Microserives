@@ -1,0 +1,53 @@
+global:
+  environment: production
+  imageRegistry: us-docker.pkg.dev/my-gcp-project/ecommerce-repo
+  imageTag: latest
+
+gateway:
+  replicaCount: 2
+  port: 8000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+services:
+  userService:
+    port: 8001
+    replicas: 2
+  productService:
+    port: 8002
+    replicas: 2
+  inventoryService:
+    port: 8003
+    replicas: 2
+  cartService:
+    port: 8004
+    replicas: 2
+  orderService:
+    port: 8005
+    replicas: 2
+  paymentService:
+    port: 8006
+    replicas: 2
+  shippingService:
+    port: 8007
+    replicas: 2
+  notificationService:
+    port: 8008
+    replicas: 2
+
+frontend:
+  replicaCount: 2
+  port: 80
+
+ingress:
+  enabled: true
+  host: store.ecommerce.example.com
+
+monitoring:
+  prometheusEnabled: true
+  grafanaEnabled: true

@@ -1,0 +1,297 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: ecommerce-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ecommerce-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: ecommerce-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: ecommerce-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      GATEWAY_PORT: 8000
+      USER_SERVICE_URL: http://user-service:8001
+      PRODUCT_SERVICE_URL: http://product-service:8002
+      INVENTORY_SERVICE_URL: http://inventory-service:8003
+      CART_SERVICE_URL: http://cart-service:8004
+      ORDER_SERVICE_URL: http://order-service:8005
+      PAYMENT_SERVICE_URL: http://payment-service:8006
+      SHIPPING_SERVICE_URL: http://shipping-service:8007
+      NOTIFICATION_SERVICE_URL: http://notification-service:8008
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+    depends_on:
+      - user-service
+      - product-service
+      - inventory-service
+      - cart-service
+      - order-service
+      - payment-service
+      - shipping-service
+      - notification-service
+    networks:
+      - ecommerce-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    container_name: ecommerce-user-service
+    ports:
+      - "8001:8001"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      USER_DB_NAME: user_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      USER_SERVICE_PORT: 8001
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    container_name: ecommerce-product-service
+    ports:
+      - "8002:8002"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      PRODUCT_DB_NAME: product_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      PRODUCT_SERVICE_PORT: 8002
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    container_name: ecommerce-inventory-service
+    ports:
+      - "8003:8003"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      INVENTORY_DB_NAME: inventory_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      INVENTORY_SERVICE_PORT: 8003
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  cart-service:
+    build:
+      context: .
+      dockerfile: services/cart-service/Dockerfile
+    container_name: ecommerce-cart-service
+    ports:
+      - "8004:8004"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      CART_DB_NAME: cart_db
+      PRODUCT_SERVICE_URL: http://product-service:8002
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      CART_SERVICE_PORT: 8004
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      product-service:
+        condition: service_started
+    networks:
+      - ecommerce-net
+
+  order-service:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    container_name: ecommerce-order-service
+    ports:
+      - "8005:8005"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      ORDER_DB_NAME: order_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      ORDER_SERVICE_PORT: 8005
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: ecommerce-payment-service
+    ports:
+      - "8006:8006"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      PAYMENT_DB_NAME: payment_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      PAYMENT_SERVICE_PORT: 8006
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  shipping-service:
+    build:
+      context: .
+      dockerfile: services/shipping-service/Dockerfile
+    container_name: ecommerce-shipping-service
+    ports:
+      - "8007:8007"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      SHIPPING_DB_NAME: shipping_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      SHIPPING_SERVICE_PORT: 8007
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: ecommerce-notification-service
+    ports:
+      - "8008:8008"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      NOTIFICATION_DB_NAME: notification_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretjwtkeychangeinproductionminimum32characterslong
+      NOTIFICATION_SERVICE_PORT: 8008
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ecommerce-frontend
+    ports:
+      - "3000:80"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - ecommerce-net
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: ecommerce-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - ecommerce-net
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: ecommerce-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - ecommerce-net
+
+networks:
+  ecommerce-net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  rabbitmq_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
