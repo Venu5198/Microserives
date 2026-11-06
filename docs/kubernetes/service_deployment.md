@@ -59,3 +59,4 @@ Apply the modification without restarting other services:
 kubectl apply -f k8s/05-services/<service-name>.yaml
 ```
 Kubernetes detects the spec change and triggers an atomic rolling update for that service alone.
+

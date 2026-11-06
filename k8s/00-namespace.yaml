@@ -5,3 +5,4 @@ metadata:
   labels:
     app.kubernetes.io/name: ecommerce-platform
     app.kubernetes.io/environment: local-k8s
+

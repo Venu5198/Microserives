@@ -26,3 +26,4 @@ kubectl apply -f k8s/07-frontend/
 
 Write-Host ">>> Deployment triggered! Checking status..." -ForegroundColor Green
 kubectl get pods -n ecommerce
+

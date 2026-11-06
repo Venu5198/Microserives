@@ -1,10 +1,11 @@
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import HTTPException, Security, status
+from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -100,8 +101,19 @@ def get_current_user_dependency(secret_key: str, algorithm: str = "HS256"):
     return get_current_user
 
 
+_default_get_current_user = get_current_user_dependency(
+    secret_key=os.getenv(
+        "JWT_SECRET_KEY",
+        "supersecretjwtkeychangeinproductionminimum32characterslong",
+    ),
+    algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
+)
+
+
 def require_roles(allowed_roles: list[str]):
-    def role_checker(user: TokenUser) -> TokenUser:
+    def role_checker(
+        user: TokenUser = Depends(_default_get_current_user),
+    ) -> TokenUser:
         if user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

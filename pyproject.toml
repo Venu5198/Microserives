@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = [
+    "E501",   # Line length handled by formatter
+    "B008",   # Standard FastAPI pattern: Depends() in function parameters
+    "B904",   # Raise from within except
+    "BLE001", # Blind exception catching in resilience handlers
+    "G201",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_default_fixture_loop_scope = "function"

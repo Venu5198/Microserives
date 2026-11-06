@@ -48,3 +48,4 @@ data:
   SHIPPING_DB_NAME: "shipping_db"
   NOTIFICATION_SERVICE_PORT: "8008"
   NOTIFICATION_DB_NAME: "notification_db"
+

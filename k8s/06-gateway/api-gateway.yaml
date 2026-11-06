@@ -69,3 +69,4 @@ spec:
       name: http
   selector:
     app: api-gateway
+
