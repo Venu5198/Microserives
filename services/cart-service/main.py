@@ -167,6 +167,7 @@ async def add_item_to_cart(
     return calculate_cart_response(user.user_id, items, now)
 
 
+@app.put("/api/v1/cart/items/{product_id}", response_model=CartResponse)
 @app.patch("/api/v1/cart/items/{product_id}", response_model=CartResponse)
 async def update_cart_item(
     product_id: str,

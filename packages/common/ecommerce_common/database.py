@@ -60,18 +60,52 @@ class DatabaseManager:
         Inserts an event into the outbox collection for guaranteed delivery.
         Can run inside an existing MongoDB transaction session if replica set is active.
         """
-        now = datetime.now(UTC)
-        message = {
-            "outbox_id": str(uuid.uuid4()),
-            "event_type": event_type,
-            "aggregate_id": aggregate_id,
-            "correlation_id": correlation_id,
-            "producer": producer,
-            "payload": payload,
-            "status": "PENDING",  # PENDING, PUBLISHED, FAILED
-            "retry_count": 0,
-            "created_at": now,
-            "updated_at": now,
-        }
-        await self.db.outbox.insert_one(message, session=session)
-        return message
+        return await record_outbox_event(
+            db=self.db,
+            event_type=event_type,
+            aggregate_id=aggregate_id,
+            correlation_id=correlation_id,
+            producer=producer,
+            payload=payload,
+            session=session,
+        )
+
+
+def resolve_db(target: Any) -> Any:
+    """Safely extracts AsyncIOMotorDatabase whether passed DatabaseManager or Database."""
+    if hasattr(target, "__class__") and target.__class__.__name__ == "DatabaseManager":
+        return getattr(target, "db", target)
+    return target
+
+
+async def record_outbox_event(
+    db: Any,
+    event_type: str,
+    aggregate_id: str,
+    correlation_id: str,
+    payload: dict[str, Any],
+    producer: str = "product-service",
+    session=None,
+    aggregate_type: str = "aggregate",
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """
+    Inserts an event into the outbox collection for guaranteed delivery.
+    """
+    now = datetime.now(UTC)
+    message = {
+        "outbox_id": str(uuid.uuid4()),
+        "event_type": event_type,
+        "aggregate_id": aggregate_id,
+        "aggregate_type": aggregate_type,
+        "correlation_id": correlation_id,
+        "producer": producer,
+        "payload": payload,
+        "status": "PENDING",  # PENDING, PUBLISHED, FAILED
+        "retry_count": 0,
+        "created_at": now,
+        "updated_at": now,
+    }
+    target_db = resolve_db(db)
+    await target_db.outbox.insert_one(message, session=session)
+    return message

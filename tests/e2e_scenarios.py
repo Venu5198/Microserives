@@ -1,9 +1,10 @@
+import os
 import time
 import uuid
 
 import httpx
 
-GATEWAY_URL = "http://localhost:18000"
+GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:30080")
 
 print("=" * 60)
 print("RUNNING LIVE END-TO-END SCENARIOS AUDIT AGAINST API GATEWAY")
@@ -51,7 +52,7 @@ log_step(
     r_prod.status_code == 200 and len(products) > 0,
     f"Found {len(products)} products",
 )
-test_prod = products[0]
+test_prod = next((p for p in products if p["id"] == "prod-101"), products[0])
 prod_id = test_prod["id"]
 
 # 3. Add to Cart

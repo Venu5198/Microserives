@@ -16,3 +16,6 @@ class EventType(str, Enum):
     REFUND_INITIATED = "RefundInitiated"
     REFUND_SUCCEEDED = "RefundSucceeded"
     REFUND_FAILED = "RefundFailed"
+    PRODUCT_CREATED = "ProductCreated"
+    PRODUCT_UPDATED = "ProductUpdated"
+    PRODUCT_DELETED = "ProductDeleted"

@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
-from ecommerce_common.database import DatabaseManager
+from ecommerce_common.database import resolve_db
 from ecommerce_common.rabbitmq import RabbitMQClient
 
 logger = logging.getLogger("outbox-worker")
@@ -11,13 +12,14 @@ logger = logging.getLogger("outbox-worker")
 class OutboxWorker:
     def __init__(
         self,
-        db_manager: DatabaseManager,
+        db_manager: Any,
         rabbitmq_client: RabbitMQClient,
         poll_interval: float = 1.0,
         batch_size: int = 50,
         max_retries: int = 5,
     ):
         self.db_manager = db_manager
+        self.db = resolve_db(db_manager)
         self.rabbitmq_client = rabbitmq_client
         self.poll_interval = poll_interval
         self.batch_size = batch_size
@@ -52,11 +54,12 @@ class OutboxWorker:
             await asyncio.sleep(self.poll_interval)
 
     async def _process_batch(self):
-        if self.db_manager.db is None:
+        target_db = self.db if self.db is not None else resolve_db(self.db_manager)
+        if target_db is None:
             return
 
         cursor = (
-            self.db_manager.db.outbox.find({"status": "PENDING"})
+            target_db.outbox.find({"status": "PENDING"})
             .sort("created_at", 1)
             .limit(self.batch_size)
         )
@@ -88,7 +91,7 @@ class OutboxWorker:
                     routing_key=routing_key,
                     envelope=envelope,
                 )
-                await self.db_manager.db.outbox.update_one(
+                await target_db.outbox.update_one(
                     {"_id": msg["_id"]},
                     {
                         "$set": {
@@ -104,7 +107,7 @@ class OutboxWorker:
                 logger.warning(
                     f"Failed to publish outbox event {outbox_id} (attempt {retry_count}): {ex}"
                 )
-                await self.db_manager.db.outbox.update_one(
+                await target_db.outbox.update_one(
                     {"_id": msg["_id"]},
                     {
                         "$set": {

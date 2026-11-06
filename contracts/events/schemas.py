@@ -148,3 +148,24 @@ class NotificationRequestedPayload(BaseModel):
     subject: str
     template_name: str
     template_data: dict[str, Any]
+
+
+class ProductCreatedPayload(BaseModel):
+    product_id: str
+    name: str
+    price: int
+    category: str
+    sku: str
+
+
+class ProductUpdatedPayload(BaseModel):
+    product_id: str
+    name: str | None = None
+    price: int | None = None
+    category: str | None = None
+    is_active: bool | None = None
+
+
+class ProductDeletedPayload(BaseModel):
+    product_id: str
+    sku: str

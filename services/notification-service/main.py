@@ -158,8 +158,6 @@ async def handle_notification_events(event_data: dict):
             await process_and_log_notification(email, "shipment_created", payload)
 
     elif event_type == EventType.SHIPMENT_STATUS_UPDATED.value:
-        # Fetch shipment recipient
-        shipment_id = payload.get("shipment_id")
         email = payload.get("recipient_email", "customer@ecommerce.local")
         await process_and_log_notification(email, "shipment_status_updated", payload)
 

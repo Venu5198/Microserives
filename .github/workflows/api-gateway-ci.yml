@@ -1,0 +1,76 @@
+name: API Gateway CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+    paths:
+      - 'api-gateway/**'
+      - 'packages/common/**'
+      - 'contracts/**'
+      - 'pyproject.toml'
+      - '.github/workflows/api-gateway-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'api-gateway/**'
+      - 'packages/common/**'
+      - 'contracts/**'
+      - 'pyproject.toml'
+      - '.github/workflows/api-gateway-ci.yml'
+
+jobs:
+  lint-and-security:
+    name: Lint & Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api-gateway/requirements.txt
+          pip install -e packages/common
+          pip install ruff bandit
+
+      - name: Run Ruff Linting
+        run: |
+          ruff check api-gateway packages/common
+
+      - name: Run Bandit Security Analysis
+        run: |
+          bandit -r api-gateway -ll -ii
+
+  docker-build:
+    name: Build & Package Docker Image
+    needs: lint-and-security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Gateway Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api-gateway/Dockerfile
+          push: false
+          tags: |
+            ecommerce/api-gateway:latest
+            ecommerce/api-gateway:v1.0.0
+            ecommerce/api-gateway:${{ github.sha }}
+
