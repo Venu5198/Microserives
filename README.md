@@ -40,17 +40,17 @@ An enterprise-grade, asynchronous e-commerce platform built with Python (FastAPI
 
 ## 2. Microservice Catalog & Database Ownership
 
-| Service | Port | Database | Primary Responsibility |
-|:---|:---|:---|:---|
-| **API Gateway** | `8000` | *None* | Reverse proxy, JWT authentication check, rate limiting, correlation ID injection |
-| **User Service** | `8001` | `user_db` | Argon2id auth, JWT issuance, rotating refresh tokens, RBAC, address book |
-| **Product Service** | `8002` | `product_db` | Product catalog CRUD, categories, search, pricing (no stock quantities) |
-| **Inventory Service** | `8003` | `inventory_db` | Concurrency-safe atomic reservations (`$inc`), release, and transaction audit |
-| **Cart Service** | `8004` | `cart_db` | Shopping cart operations, catalog price validation, subtotal calculation |
-| **Order Service** | `8005` | `order_db` | Order placement, Saga state machine orchestrator, cancellation workflows |
-| **Payment Service** | `8006` | `payment_db` | Sandbox payment gateway, idempotency key guarantees, refund processing |
-| **Shipping Service** | `8007` | `shipping_db` | Automatic label creation, tracking timeline, courier status simulation |
-| **Notification Service** | `8008` | `notification_db` | Event-driven customer emails (SMTP / simulation), delivery audit log |
+| Service                        | Port     | Database            | Primary Responsibility                                                           |
+| :----------------------------- | :------- | :------------------ | :------------------------------------------------------------------------------- |
+| **API Gateway**          | `8000` | *None*            | Reverse proxy, JWT authentication check, rate limiting, correlation ID injection |
+| **User Service**         | `8001` | `user_db`         | Argon2id auth, JWT issuance, rotating refresh tokens, RBAC, address book         |
+| **Product Service**      | `8002` | `product_db`      | Product catalog CRUD, categories, search, pricing (no stock quantities)          |
+| **Inventory Service**    | `8003` | `inventory_db`    | Concurrency-safe atomic reservations (`$inc`), release, and transaction audit  |
+| **Cart Service**         | `8004` | `cart_db`         | Shopping cart operations, catalog price validation, subtotal calculation         |
+| **Order Service**        | `8005` | `order_db`        | Order placement, Saga state machine orchestrator, cancellation workflows         |
+| **Payment Service**      | `8006` | `payment_db`      | Sandbox payment gateway, idempotency key guarantees, refund processing           |
+| **Shipping Service**     | `8007` | `shipping_db`     | Automatic label creation, tracking timeline, courier status simulation           |
+| **Notification Service** | `8008` | `notification_db` | Event-driven customer emails (SMTP / simulation), delivery audit log             |
 
 ---
 
@@ -71,11 +71,13 @@ An enterprise-grade, asynchronous e-commerce platform built with Python (FastAPI
 ## 4. Quickstart Guide (Local Development)
 
 ### Prerequisites
+
 - Docker & Docker Compose
 - Python 3.12+
 - Node.js 18+
 
 ### Running the Entire Platform
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/your-org/ecommerce-platform.git
@@ -97,9 +99,19 @@ docker compose up -d --build
 
 ---
 
+Open the platform in your browser:
+
+* Storefront & Checkout: [http://localhost:3000](http://localhost:3000)
+* Admin Console & Courier Simulator: [http://localhost:3000/admin](http://localhost:3000/admin)
+* API Gateway OpenAPI Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+* RabbitMQ Management Dashboard: [http://localhost:15672](http://localhost:15672)(User: `guest`, Pass: `guest`)
+* Prometheus Metrics: [http://localhost:9090](http://localhost:9090)
+* Grafana Observability: [http://localhost:3001](http://localhost:3001)(User: `admin`, Pass: `admin`)
+
 ## 5. Automated Testing
 
 Run the automated test suite covering unit tests and integrated Saga compensation:
+
 ```bash
 # Setup virtual environment
 python -m venv .venv

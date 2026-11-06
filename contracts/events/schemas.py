@@ -147,3 +147,4 @@ class NotificationRequestedPayload(BaseModel):
     subject: str
     template_name: str
     template_data: Dict[str, Any]
+

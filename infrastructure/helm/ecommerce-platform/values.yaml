@@ -51,3 +51,4 @@ ingress:
 monitoring:
   prometheusEnabled: true
   grafanaEnabled: true
+

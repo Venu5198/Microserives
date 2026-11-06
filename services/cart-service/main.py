@@ -212,3 +212,4 @@ async def remove_cart_item(
 @app.delete("/api/v1/cart", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_cart(user: TokenUser = Depends(get_current_user)):
     await db.carts.delete_one({"user_id": user.user_id})
+

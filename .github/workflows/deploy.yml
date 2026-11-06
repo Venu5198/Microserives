@@ -58,3 +58,4 @@ jobs:
           gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }}
           helm upgrade --install ecommerce-platform infrastructure/helm/ecommerce-platform \
             --namespace ecommerce-prod --create-namespace
+

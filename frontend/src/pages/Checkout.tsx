@@ -293,3 +293,4 @@ export const Checkout: React.FC = () => {
     </div>
   );
 };
+

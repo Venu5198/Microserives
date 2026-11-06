@@ -29,7 +29,7 @@ class AddressResponse(AddressCreate):
 
 
 class UserRegisterRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=8)
     first_name: str
     last_name: str
@@ -37,7 +37,7 @@ class UserRegisterRequest(BaseModel):
 
 
 class UserLoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -63,3 +63,4 @@ class UserProfileResponse(BaseModel):
     is_active: bool
     addresses: List[AddressResponse] = []
     created_at: datetime
+

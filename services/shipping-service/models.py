@@ -41,3 +41,4 @@ class ShipmentResponse(BaseModel):
     events: List[TrackingEventResponse] = []
     created_at: datetime
     updated_at: datetime
+

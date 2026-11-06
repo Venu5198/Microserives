@@ -9,3 +9,4 @@ def test_cart_item_subtotals():
 
     assert total_amount == 5500
     assert total_items == 3
+

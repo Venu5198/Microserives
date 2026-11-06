@@ -228,3 +228,4 @@ async def delete_product(product_id: str, user: TokenUser = Depends(get_current_
         {"$set": {"is_active": False, "updated_at": utc_now()}},
     )
     logger.info(f"Product {product_id} deactivated by admin {user.user_id}")
+

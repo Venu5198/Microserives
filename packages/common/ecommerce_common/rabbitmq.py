@@ -131,3 +131,4 @@ class RabbitMQClient:
 
         asyncio.create_task(_consumer())
         logger.info(f"Consumer started on queue: {queue_name} for keys: {routing_keys}")
+

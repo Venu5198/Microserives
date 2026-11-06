@@ -305,3 +305,4 @@ async def list_all_users(user: TokenUser = Depends(get_current_user)):
     cursor = db.users.find().limit(100)
     users = await cursor.to_list(100)
     return [serialize_doc(u) for u in users]
+

@@ -23,3 +23,4 @@ export const ProtectedRoute: React.FC<{ adminOnly?: boolean }> = ({ adminOnly = 
 
   return <Outlet />;
 };
+

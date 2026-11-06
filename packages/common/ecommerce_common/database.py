@@ -69,3 +69,4 @@ class DatabaseManager:
         }
         await self.db.outbox.insert_one(message, session=session)
         return message
+

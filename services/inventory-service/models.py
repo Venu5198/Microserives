@@ -38,3 +38,4 @@ class ReserveItemRequest(BaseModel):
 class ReserveStockRequest(BaseModel):
     order_id: str
     items: List[ReserveItemRequest]
+

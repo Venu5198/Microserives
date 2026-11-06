@@ -25,3 +25,4 @@ type: Opaque
 stringData:
   JWT_SECRET_KEY: "prod-jwt-secret-key-super-secure-at-least-32-chars-long"
   MONGO_URI: "mongodb://mongo-user:securepassword@mongodb.ecommerce-prod.svc.cluster.local:27017"
+

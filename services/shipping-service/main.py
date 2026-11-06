@@ -269,3 +269,4 @@ async def update_shipment_status(
 
     updated_doc = await db_manager.db.shipments.find_one({"_id": shipment_id})
     return serialize_shipment(updated_doc)
+

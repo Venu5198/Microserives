@@ -31,3 +31,4 @@ class CartResponse(BaseModel):
     total_amount: int
     total_items: int
     updated_at: datetime
+

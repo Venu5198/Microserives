@@ -209,7 +209,6 @@ async def lifespan(app: FastAPI):
     # Indexes
     await db_manager.db.payments.create_index("order_id")
     await db_manager.db.payments.create_index("status")
-    await db_manager.db.idempotency_keys.create_index("_id", unique=True)
     await db_manager.db.outbox.create_index("status")
 
     try:
@@ -397,3 +396,4 @@ async def refund_payment(
         reason=request.reason,
         created_at=now,
     )
+

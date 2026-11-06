@@ -241,3 +241,4 @@ async def list_notifications(
     cursor = db_manager.db.notifications.find().sort("created_at", -1).skip(skip).limit(limit)
     items = await cursor.to_list(length=limit)
     return [NotificationResponse(**serialize_doc(doc)) for doc in items]
+

@@ -35,3 +35,4 @@ def test_jwt_invalid_token():
     with pytest.raises(HTTPException) as exc_info:
         decode_jwt_token("invalid.token.string", secret_key=secret)
     assert exc_info.value.status_code == 401
+

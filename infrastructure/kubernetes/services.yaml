@@ -246,3 +246,4 @@ spec:
       targetPort: 8003
   selector:
     app: inventory-service
+

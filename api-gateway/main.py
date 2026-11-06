@@ -201,3 +201,4 @@ async def route_proxy(request: Request, path: str):
     except Exception as e:
         logger.error(f"Gateway proxy error: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Bad Gateway: {str(e)}")
+

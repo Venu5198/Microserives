@@ -43,3 +43,4 @@ def test_order_created_event_serialization():
     assert data["aggregate_id"] == "ord-001"
     assert data["payload"]["total_amount"] == 39998
     assert len(data["payload"]["items"]) == 1
+

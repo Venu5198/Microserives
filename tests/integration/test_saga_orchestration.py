@@ -106,3 +106,4 @@ def test_payment_failure_compensation():
     assert saga.saga_state[order_id] == "COMPENSATING"
     assert saga.events_published[-1]["event_type"] == "OrderCancelled"
     assert saga.events_published[-1]["inventory_release_required"] is True
+

@@ -19,3 +19,4 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
 def register_base_middlewares(app: FastAPI):
     app.add_middleware(CorrelationIdMiddleware)
+

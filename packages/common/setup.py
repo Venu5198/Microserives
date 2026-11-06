@@ -8,9 +8,11 @@ setup(
         "fastapi",
         "pydantic",
         "pydantic-settings",
+        "email-validator",
         "motor",
         "aio-pika",
         "pyjwt",
         "argon2-cffi",
     ],
 )
+

@@ -8,7 +8,7 @@ def utc_now() -> datetime:
 
 
 class NotificationSendRequest(BaseModel):
-    recipient_email: EmailStr
+    recipient_email: str
     recipient_name: Optional[str] = "Customer"
     subject: str
     template_name: str
@@ -26,3 +26,4 @@ class NotificationResponse(BaseModel):
     error: Optional[str] = None
     created_at: datetime
     sent_at: Optional[datetime] = None
+

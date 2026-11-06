@@ -181,3 +181,4 @@ export const AdminInventory: React.FC = () => {
     </div>
   );
 };
+

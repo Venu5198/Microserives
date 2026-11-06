@@ -464,3 +464,4 @@ async def manual_reserve_stock(req: ReserveStockRequest):
     if not success:
         raise HTTPException(status_code=400, detail="Insufficient stock")
     return {"status": "reserved", "order_id": req.order_id}
+

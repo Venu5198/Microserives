@@ -3,7 +3,7 @@ services:
     image: mongo:7.0
     container_name: ecommerce-mongo
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -18,8 +18,8 @@ services:
     image: rabbitmq:3.13-management
     container_name: ecommerce-rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -37,7 +37,7 @@ services:
     image: redis:7.2-alpine
     container_name: ecommerce-redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -54,7 +54,7 @@ services:
       dockerfile: api-gateway/Dockerfile
     container_name: ecommerce-api-gateway
     ports:
-      - "8000:8000"
+      - "18000:8000"
     environment:
       GATEWAY_PORT: 8000
       USER_SERVICE_URL: http://user-service:8001
@@ -84,7 +84,7 @@ services:
       dockerfile: services/user-service/Dockerfile
     container_name: ecommerce-user-service
     ports:
-      - "8001:8001"
+      - "18001:8001"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       USER_DB_NAME: user_db
@@ -105,7 +105,7 @@ services:
       dockerfile: services/product-service/Dockerfile
     container_name: ecommerce-product-service
     ports:
-      - "8002:8002"
+      - "18002:8002"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       PRODUCT_DB_NAME: product_db
@@ -124,7 +124,7 @@ services:
       dockerfile: services/inventory-service/Dockerfile
     container_name: ecommerce-inventory-service
     ports:
-      - "8003:8003"
+      - "18003:8003"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       INVENTORY_DB_NAME: inventory_db
@@ -145,7 +145,7 @@ services:
       dockerfile: services/cart-service/Dockerfile
     container_name: ecommerce-cart-service
     ports:
-      - "8004:8004"
+      - "18004:8004"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       CART_DB_NAME: cart_db
@@ -166,7 +166,7 @@ services:
       dockerfile: services/order-service/Dockerfile
     container_name: ecommerce-order-service
     ports:
-      - "8005:8005"
+      - "18005:8005"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       ORDER_DB_NAME: order_db
@@ -187,7 +187,7 @@ services:
       dockerfile: services/payment-service/Dockerfile
     container_name: ecommerce-payment-service
     ports:
-      - "8006:8006"
+      - "18006:8006"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       PAYMENT_DB_NAME: payment_db
@@ -208,7 +208,7 @@ services:
       dockerfile: services/shipping-service/Dockerfile
     container_name: ecommerce-shipping-service
     ports:
-      - "8007:8007"
+      - "18007:8007"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       SHIPPING_DB_NAME: shipping_db
@@ -229,7 +229,7 @@ services:
       dockerfile: services/notification-service/Dockerfile
     container_name: ecommerce-notification-service
     ports:
-      - "8008:8008"
+      - "18008:8008"
     environment:
       MONGO_URI: mongodb://mongodb:27017
       NOTIFICATION_DB_NAME: notification_db
@@ -252,9 +252,9 @@ services:
       dockerfile: Dockerfile
     container_name: ecommerce-frontend
     ports:
-      - "3000:80"
+      - "13000:80"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: http://localhost:18000
     depends_on:
       - api-gateway
     networks:
@@ -264,7 +264,7 @@ services:
     image: prom/prometheus:v2.51.0
     container_name: ecommerce-prometheus
     ports:
-      - "9090:9090"
+      - "19090:9090"
     volumes:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -275,7 +275,7 @@ services:
     image: grafana/grafana:10.4.1
     container_name: ecommerce-grafana
     ports:
-      - "3001:3000"
+      - "13001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:

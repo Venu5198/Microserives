@@ -513,3 +513,4 @@ async def cancel_order(
     logger.info(f"Order {order_id} cancelled by user {user.user_id}")
     updated_order = await db_manager.db.orders.find_one({"_id": order_id})
     return serialize_order(updated_order)
+
