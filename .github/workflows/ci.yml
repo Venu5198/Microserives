@@ -31,6 +31,8 @@ jobs:
           bandit -r services/ packages/ -ll -ii || true
 
       - name: Run Pytest Suite
+        env:
+          PYTHONPATH: .
         run: |
           pytest tests/ -v
 
