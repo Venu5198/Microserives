@@ -1,0 +1,103 @@
+name: Payment Service CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+    paths:
+      - 'services/payment-service/**'
+      - 'packages/common/**'
+      - 'contracts/**'
+      - 'pyproject.toml'
+      - '.github/workflows/payment-service-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/payment-service/**'
+      - 'packages/common/**'
+      - 'contracts/**'
+      - 'pyproject.toml'
+      - '.github/workflows/payment-service-ci.yml'
+
+jobs:
+  lint-test-security:
+    name: Lint, Test & Security Scan
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3.13-management
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics check_running"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/payment-service/requirements.txt
+          pip install -e packages/common
+          pip install ruff bandit pytest pytest-asyncio httpx
+
+      - name: Run Ruff Linting
+        run: |
+          ruff check services/payment-service packages/common contracts
+
+      - name: Run Bandit Security Analysis
+        run: |
+          bandit -r services/payment-service -ll -ii
+
+      - name: Run Payment Service Unit Tests
+        env:
+          PYTHONPATH: .
+        run: |
+          pytest services/payment-service/tests/test_payment_service_unit.py -v
+
+  docker-build:
+    name: Build & Package Docker Image
+    needs: lint-test-security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Payment Service Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/payment-service/Dockerfile
+          push: false
+          tags: |
+            ecommerce/payment-service:latest
+            ecommerce/payment-service:v1.0.0
+            ecommerce/payment-service:${{ github.sha }}
+

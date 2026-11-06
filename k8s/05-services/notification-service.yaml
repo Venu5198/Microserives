@@ -18,7 +18,7 @@ spec:
       containers:
         - name: notification-service
           image: ecommerce/notification-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 8008
               name: http

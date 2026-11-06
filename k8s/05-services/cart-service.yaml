@@ -18,7 +18,7 @@ spec:
       containers:
         - name: cart-service
           image: ecommerce/cart-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 8004
               name: http
