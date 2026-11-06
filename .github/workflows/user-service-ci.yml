@@ -84,3 +84,4 @@ jobs:
             ecommerce/user-service:latest
             ecommerce/user-service:v1.0.0
             ecommerce/user-service:${{ github.sha }}
+

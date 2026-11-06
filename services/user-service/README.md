@@ -132,3 +132,4 @@ The User Service features an independent CI pipeline defined in [`.github/workfl
 3. **Static Security Analysis**: Scans with `bandit -r services/user-service -ll -ii` (zero high/medium vulnerability requirement).
 4. **Isolated Automated Tests**: Spins up a containerized MongoDB service (`mongo:7.0`) and runs the pytest test suite.
 5. **Artifact Packaging**: Builds the Docker container and tags it with semantic versions and commit SHAs (`ecommerce/user-service:${{ github.sha }}`) without automatic cloud deployment.
+
