@@ -71,18 +71,23 @@ Each program runs in its own process, connects to its own database, and communic
 ## 2. Monolithic Architecture vs. Microservices Architecture
 
 ### Monolithic Architecture
-In a monolith, all software components—user registration, product catalog, inventory tracking, order processing, and payment—are compiled, packaged, and executed as a single unified binary or process. All modules read and write to one central database.
+A monolithic architecture is defined by its **unified deployment model**: all components, modules, and business capabilities of the application are coupled into a single unit that must be built, tested, and released together. A monolith is not strictly defined by whether it runs as a single operating system process or connects to a single database—a monolithic application may consist of multiple processes, background workers, or multi-tier servers—but rather by the fact that changes to any component necessitate rebuilding, validating, and deploying the application as a unified release unit.
 
 ### Microservices Architecture
-In microservices, the system is decomposed along business domain boundaries (Bounded Contexts). Each microservice is an autonomous software artifact with its own repository/directory, runtime dependencies, continuous integration pipeline, and private database.
+In microservices, the system is decomposed along business domain boundaries (Bounded Contexts). Each microservice is an autonomous software artifact with its own runtime dependencies, dedicated continuous integration pipeline, independent release cadence, and private database.
+
+#### Repository Strategies: Monorepo vs. Multi-Repo
+Microservices architecture defines independent service boundaries at runtime and deployment, but is neutral regarding code repository structure. Teams can organize microservices using either approach:
+- **Monorepo (Single Repository):** All microservices reside in one shared Git repository (as OmniStore does). This simplifies cross-cutting refactoring, shared library management (`packages/common`), contract versioning, and local developer setup, while path-filtered CI workflows (`.github/workflows/`) build and test each service independently based on file changes.
+- **Multi-Repo (Multiple Repositories):** Each microservice has its own dedicated Git repository with independent version history and access control. This enforces strict isolation between engineering teams, but requires formal package versioning and artifact registries (e.g., PyPI) for shared code.
 
 ### Comparison Matrix
 
 | Architectural Dimension | Monolithic Architecture | Microservices Architecture (OmniStore) |
 |---|---|---|
-| **Code Organization** | Single codebase, shared utility folders | Decoupled services with explicit contracts |
+| **Code Organization** | Single codebase, shared utility folders | Decoupled services (can use monorepo or multi-repo) |
 | **Database Ownership** | Shared central database with foreign keys | Database-per-service (`user_db`, `order_db`, etc.) |
-| **Deployment** | All-or-nothing release cycle | Independent zero-downtime rolling deployments |
+| **Deployment** | All-or-nothing release cycle | Independent rolling deployments (safe zero-downtime requires backward-compatible contracts and probes) |
 | **Scaling** | Scale whole monolith vertically/horizontally | Granular horizontal scaling per service bottleneck |
 | **Fault Isolation** | Memory leak or crash takes down entire app | Failure in one service does not halt other services |
 | **Data Consistency** | ACID transactions via single database engine | Eventual consistency via Saga orchestration |
@@ -172,7 +177,7 @@ OmniStore splits e-commerce operations into **nine distinct components** (eight 
 - **APIs Exposed:** `GET /api/v1/products`, `GET /api/v1/products/{id}`, `POST /api/v1/products`, `PUT /api/v1/products/{id}`, `DELETE /api/v1/products/{id}`.
 - **Events:** Emits `ProductCreated`, `ProductUpdated`, `ProductDeleted` via Transactional Outbox.
 - **Caching:** Integrates Redis cache-aside (300s TTL) with automatic invalidation on catalog mutations (`X-Cache: HIT/MISS`).
-- **Why Separate:** Browsing represents 95%+ of typical e-commerce traffic. Product Service can be aggressively cached and scaled independently of write-heavy checkout services.
+- **Why Separate:** Browsing is typically read-heavy and experiences substantially higher request volumes than write-heavy checkout operations. Product Service can be aggressively cached with Redis and scaled independently without placing load on write-sensitive transactional services.
 
 #### 4. Inventory Service
 - **Business Problem:** Stock tracking and guaranteed overselling prevention under concurrent customer load.
@@ -200,7 +205,7 @@ OmniStore splits e-commerce operations into **nine distinct components** (eight 
 - **APIs Exposed:** `POST /api/v1/payments`, `GET /api/v1/payments/{id}`.
 - **Events:** Consumes `PaymentInitiated`. Emits `PaymentSucceeded`, `PaymentFailed`.
 - **Security:** Masks sensitive credit card numbers (only `card_last_four` is persisted; CVVs are never saved).
-- **Why Separate:** Payment operations fall under strict PCI-DSS compliance boundaries. Isolating payments simplifies regulatory audits and enforces strict network and data segregation.
+- **Why Separate:** In real-world commerce, payment processing involves strict regulatory standards (such as PCI-DSS) that require isolating cardholder data environments from general application code. OmniStore uses a simulated sandbox gateway and does not claim PCI-DSS compliance, but it models the architectural boundary separation, card data masking, and idempotency safeguards typical of dedicated payment microservices.
 
 #### 8. Shipping Service
 - **Business Problem:** Courier tracking number allocation, package dispatch simulation, tracking timeline.
@@ -244,6 +249,16 @@ MongoDB Instance (Cluster / Pod)
 ├── shipping_db      <-- Owned EXCLUSIVELY by Shipping Service
 └── notification_db  <-- Owned EXCLUSIVELY by Notification Service
 ```
+
+### Logical Database Ownership vs. Physical Infrastructure Isolation
+It is crucial to distinguish between **logical database ownership** and **physical database infrastructure isolation**:
+
+1. **Logical Database Ownership (Architectural Invariant):**
+   Every microservice strictly encapsulates its domain data. No service may ever read from or write to another service's database directly. All cross-service data access must pass through well-defined APIs or asynchronous events. This boundary prevents schema coupling, protects sensitive data (e.g., credentials and payments), and ensures each service can independently evolve its internal data structures.
+2. **Physical Infrastructure Isolation (Deployment & Operational Choice):**
+   In enterprise production deployments, physical isolation often involves hosting databases on completely separate database clusters, managed database instances (e.g., dedicated MongoDB Atlas clusters or AWS DocumentDB instances), or different storage technologies entirely (polyglot persistence).
+3. **OmniStore's Deployment Reality:**
+   OmniStore configures eight distinct logical databases (`user_db`, `product_db`, `order_db`, etc.) running on a single MongoDB StatefulSet instance for local development and demonstration efficiency. This enforces **strict logical database ownership** across service code and connection strings, but does **not** provide physical infrastructure isolation (e.g., hardware resources, CPU, memory, disk I/O, and database server availability remain shared).
 
 ### Why Can't Services Share a Database?
 1. **Schema Coupling:** If Service A directly reads Service B's tables, Service B can never rename or migrate a column without breaking Service A.
@@ -580,6 +595,13 @@ Because MongoDB applies updates to individual documents atomically, concurrent r
 ### What Independent Deployment Means
 In a microservices architecture, you can modify, test, build, and deploy the `product-service` without redeploying, rebuilding, or stopping the `user-service`, `order-service`, or any other service.
 
+#### Conditions Required for Safe Rolling Deployments
+Independent microservices do not automatically guarantee zero downtime during updates. Achieving safe, zero-downtime rolling deployments requires satisfying specific engineering and operational conditions:
+1. **Backward-Compatible Contracts:** APIs and published event schemas must be backward compatible (e.g., additive field changes only) so existing consumers and in-flight clients are not broken when an updated service instance starts receiving traffic.
+2. **Accurate Readiness Probes:** The orchestrator (Kubernetes) must not direct user traffic to newly started pods until they have fully initialized database connections and caches (`/ready`).
+3. **Graceful Termination:** Pods must capture `SIGTERM`, stop accepting new requests, finish processing in-flight requests and unacknowledged messages, and flush outbox buffers before shutting down.
+4. **Expand/Contract Database Changes:** Schema migrations must follow an expand-contract model so both old and new pod versions can operate simultaneously against the database during deployment.
+
 ### Local Kubernetes Architecture (`k8s/`)
 OmniStore is configured for deployment on **Docker Desktop Kubernetes**:
 
@@ -854,8 +876,8 @@ $GATEWAY = "http://localhost:30080"
 
 ### Exercise 17: Inspect MongoDB Database-per-Service
 - **Action:** Run `kubectl exec -n ecommerce mongodb-0 -- mongosh --eval "db.getMongo().getDBNames()"`
-- **What to Observe:** Eight separate databases: `user_db`, `product_db`, `order_db`, etc.
-- **Concept:** Physical database-per-service isolation.
+- **What to Observe:** Eight separate logical databases: `user_db`, `product_db`, `order_db`, etc.
+- **Concept:** Logical database-per-service ownership. Hosting multiple logical databases on a single local MongoDB pod provides logical data boundary separation, but does not provide physical infrastructure or hardware fault isolation.
 
 ### Exercise 18: Trace a Transaction with Correlation ID
 - **Action:** Make a request with `-H "X-Correlation-ID: my-test-trace-001"`, then inspect logs:
